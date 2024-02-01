@@ -44,6 +44,10 @@ Code reflection consists of three parts:
 
   3.  APIs to build, analyze, and transform code models.
 
+## Documents
+  - Articles
+    - [Automatic differentiation of Java code using Code Reflection](articles/auto-diff.md) (February 2024)
+    
 ## Community
 
   - Mailing lists & news
