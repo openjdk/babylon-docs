@@ -46,7 +46,7 @@ Code reflection consists of three parts:
 
 ## Documents
   - Articles
-    - [Automatic differentiation of Java code using Code Reflection](articles/auto-diff.md) (February 2024)
+    - [Automatic differentiation of Java code using Code Reflection](articles/auto-diff) (February 2024)
     
 ## Community
 
