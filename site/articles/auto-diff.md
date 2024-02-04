@@ -423,7 +423,7 @@ FuncOp partialDiff() {
 
     // Transform f to f' w.r.t ind
     AtomicBoolean first = new AtomicBoolean(true);
-    FuncOp dfcm = f.transform(STR."d\{f.funcName()}_darg\{indI}",
+    FuncOp dfcm = fcm.transform(STR."d\{fcm.funcName()}_darg\{indI}",
             (block, op) -> {
                 // Initialization
                 if (first.getAndSet(false)) {
