@@ -384,7 +384,7 @@ public final class ForwardDifferentiation {
     Value zero;
 
     private ForwardDifferentiation(FuncOp fcm, Block.Parameter ind) {
-        int indI = f.body().entryBlock().parameters().indexOf(ind);
+        int indI = fcm.body().entryBlock().parameters().indexOf(ind);
         if (indI == -1) {
             throw new IllegalArgumentException("Independent argument not defined by function");
         }
@@ -392,7 +392,7 @@ public final class ForwardDifferentiation {
         this.ind = ind;
 
         // Calculate the active set of dependent values for the independent value
-        this.activeSet = ActiveSet.activeSet(f, ind);
+        this.activeSet = ActiveSet.activeSet(fcm, ind);
         // A mapping of input values to their (output) differentiated values
         this.diffValueMapping = new HashMap<>();
     }
@@ -423,7 +423,7 @@ FuncOp partialDiff() {
 
     // Transform f to f' w.r.t ind
     AtomicBoolean first = new AtomicBoolean(true);
-    FuncOp dfcm = f.transform(STR."d\{f.funcName()}_darg\{indI}",
+    FuncOp dfcm = fcm.transform(STR."d\{fcm.funcName()}_darg\{indI}",
             (block, op) -> {
                 // Initialization
                 if (first.getAndSet(false)) {
