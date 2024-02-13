@@ -478,7 +478,7 @@ from that method.
 Value diffOp(Block.Builder block, Op op) {
     // Switch on the op, using pattern matching
     return switch (op) {
-        case ... ->{
+        case ... -> {
         }
         case CoreOps.MulOp _ -> {
             // Copy input operation
