@@ -47,6 +47,7 @@ Code reflection consists of three parts:
 ## Documents
 
   - Articles
+    - [Code Models](articles/code-models) (June 2024)
     - [Automatic differentiation of Java code using Code Reflection](articles/auto-diff) (February 2024)
     - [Emulating C# LINQ in Java using Code Reflection](articles/linq) (February 2024)
     - [Exploring Triton GPU programming for neural networks in Java](articles/triton)  (February 2024)
