@@ -801,8 +801,9 @@ iteration. The (back) branch in `^block_3` passes the values to be used for the
 next loop iteration as block arguments.
 
 > A value can be used by an operation if it is defined earlier in the same
-> block or defined in a dominating block. This is why the `invoke` operation
-> in `^block_2` can use `%4`, since `^block_1` dominates `^block_2`.
+> block or defined in a dominating block. This is why the `add` operation
+> in `^block_2` or the `invoke` operation in `^block_4` can use `%4`, since 
+> `^block_1` dominates `^block_2` and `^block_4`.
 
 > Structured control flow operations and pure SSA form are not mutually
 > exclusive. Although we will not model Java expressions and statement
