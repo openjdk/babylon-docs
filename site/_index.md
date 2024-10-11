@@ -58,11 +58,21 @@ Code reflection consists of three parts:
     - [babylon-dev](https://mail.openjdk.org/mailman/listinfo/babylon-dev)
       ([archives](https://mail.openjdk.org/pipermail/babylon-dev/))
   - Talks
-    - JVMLS 2023, Code Reflection,
-      [slides](https://cr.openjdk.org/~psandoz/conferences/2023-JVMLS/Code-Reflection-JVMLS-23-08-07.pdf),
-      [video](https://youtu.be/xbk9_6XA_IY)
-    - JVMLS 2023, Java and GPU ... are we nearly there yet?,
-      [video](https://youtu.be/lbKBu3lTftc)
+    - JVMLS 2024
+        - Code Reflection,
+          [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/Code-Reflection-JVMLS-24-08-05.pdf),
+          [video](https://www.youtube.com/watch?v=6c0DB2kwF_Q&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=5&pp=iAQB)
+        - Heterogeneous Accelerator Toolkit,
+          [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/JAVA_BABYLON_HAT-JVMLS-24-08-05.pdf),
+          [video](https://www.youtube.com/watch?v=szGiOvfTPfI&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=15)
+        - Translating Java to SPIR-V,
+          [video](https://www.youtube.com/watch?v=GQLBzrbkiKA&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=9)
+    - JVMLS 2023
+        - Code Reflection,
+          [slides](https://cr.openjdk.org/~psandoz/conferences/2023-JVMLS/Code-Reflection-JVMLS-23-08-07.pdf),
+          [video](https://youtu.be/xbk9_6XA_IY)
+        - Java and GPU ... are we nearly there yet?,
+          [video](https://youtu.be/lbKBu3lTftc)
 
 ## Repository
 
