@@ -65,6 +65,9 @@ Code reflection consists of three parts:
     - JVMLS 2025
         - Code Reflection,
           [slides](https://cr.openjdk.org/~psandoz/conferences/2025-JVMLS/Code-Reflection-JVMLS-25-08-04.pdf),
+    - JavaOne 2025
+        - Java GPGPU Enablement: Are We There Yet?  
+          [video](https://inside.java/2025/07/14/javaone-hat/)
     - JVMLS 2024
         - Code Reflection,
           [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/Code-Reflection-JVMLS-24-08-05.pdf),
