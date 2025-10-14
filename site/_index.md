@@ -58,6 +58,13 @@ Code reflection consists of three parts:
     - [babylon-dev](https://mail.openjdk.org/mailman/listinfo/babylon-dev)
       ([archives](https://mail.openjdk.org/pipermail/babylon-dev/))
   - Talks
+    - Devoxx Belgium 2025
+        - Java for AI,
+          [slides](https://cr.openjdk.org/~psandoz/conferences/2025-Devoxx-Belgium/Devoxx-Belgium-25-Java-For-AI.pdf),
+          [video](https://inside.java/2025/10/14/devoxxbelgium-java-for-ai/)
+    - JVMLS 2025
+        - Code Reflection,
+          [slides](https://cr.openjdk.org/~psandoz/conferences/2025-JVMLS/Code-Reflection-JVMLS-25-08-04.pdf),
     - JVMLS 2024
         - Code Reflection,
           [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/Code-Reflection-JVMLS-24-08-05.pdf),
