@@ -2,16 +2,17 @@
 
 #### Paul Sandoz {.author}
 
-#### June 2024 {.date}
+#### June 2024, Updated Dec 2025 {.date}
 
 Code reflection, an enhancement to Java reflection, enables access to symbolic
-representations of Java code in method bodies and lambda bodies. "Symbolic
+representations of Java code in method and lambda expressions. "Symbolic
 representations of Java code" may seem like a fancy term, but its easily
-demystified. It's a model of Java code where the code of a method or lambda body
-is represented as instances of specific Java classes arranged in an appropriate
-structure. Thereby it is possible to write Java programs that manipulate Java
-programs. Before we get into the details of how code reflection models Java code
-we should talk about two existing approaches to modeling Java code.
+demystified. It's a model of Java code where the code of a method or lambda
+expressions is represented as instances of specific Java classes arranged in an
+appropriate structure. Thereby it is possible to write Java programs that
+manipulate Java programs. Before we get into the details of how code reflection
+models Java code we should talk about two existing approaches to modeling Java
+code.
 
 Java developers use a Java program every day that manipulates Java programs.
 It's called the Java compiler. It has its own internal model of Java code,
@@ -52,10 +53,10 @@ code reflection's model.
 ## Code model design
 
 Code reflection devises a third model of Java code, instances of which are
-called _code models_. Code models for identified method and lambda bodies are
-produced by the Java compiler, stored in class files, and made accessible at run
-time via reflective APIs. The Java compiler will transform an AST to a Java code
-model, in addition to generating bytecode instructions. Such code models
+called _code models_. Code models for identified method and lambda expressions
+are produced by the Java compiler, stored in class files, and made accessible at
+run time via reflective APIs. The Java compiler will transform an AST to a Java
+code model, in addition to generating bytecode instructions. Such code models
 preserve Java program meaning. The code model will not contain all the syntactic
 details as present in the AST but will retain type information and structural
 information that is not present in bytecode. It is useful to think of code
@@ -127,28 +128,33 @@ Consider the following method, `sub`, that subtracts two values.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double sub(double a, double b) {
    return a - b;
 }
 ```
 [//]: # (@formatter:on)
 
-We annotate it with `@CodeReflection` to identify that the method's code model
+We annotate it with `@Reflect` to identify that the method's code model
 should be built by the compiler and made accessible at runtime using the
 reflection API.
 
 We find the `java.lang.reflect.Method` instance of `sub`, and then ask it for
-its code model by invoking the method `getCodeModel`. Only methods annotated
-with `@CodeReflection` will have code models, hence this method is partial.
+its code model by invoking the method `Op.ofMethod`. Only methods annotated
+with `@Reflect` will have code models, hence this method is partial.
+
+(Note: since code reflection is an incubating feature we cannot add new APIs in
+packages of other modules, such as in the `java.lang.reflect` package of the
+`java.base` module. For now, we must provide such methods in the incubating code
+reflection module.)
 
 [//]: # (@formatter:off)
 ```java
 // Get the reflective object for method sub
-Method m = ExpressionGraphs.class.getDeclaredMethod(
+Method m = TestExpressionGraphs.class.getDeclaredMethod(
         "sub", double.class, double.class);
 // Get the code model for method sub
-Optional<CoreOp.FuncOp> oModel = m.getCodeModel();
+Optional<CoreOp.FuncOp> oModel = Op.ofMethod(m);
 CoreOp.FuncOp model = oModel.orElseThrow();
 ```
 [//]: # (@formatter:on)
@@ -162,56 +168,60 @@ this by traversing the model, a tree, and printing out all the code elements.
 
 [//]: # (@formatter:off)
 ```jshelllanguage
-// Depth-first search, reporting elements in pre-order
-model.traverse(null, (acc, codeElement) -> {
-    // Count the depth of the code element by
-    // traversing up the tree from child to parent
+// Stream of elements topologically sorted in depth-first search pre-order
+model.elements().forEach(codeElement -> {
+    // Count the depth of the code element
     int depth = 0;
     CodeElement<?, ?> parent = codeElement;
     while ((parent = parent.parent()) != null) depth++;
     // Print out code element class
     System.out.println("  ".repeat(depth) + codeElement.getClass());
-    return acc;
 });
 ```
 [//]: # (@formatter:on)
 
-> The first argument passed to the `traverse` method is the initial value of an
-> object that can be used to accumulate a result. The final accumulated
-> result is returned. In this case we don't need to accumulate, so we pass
-> a `null` value.
-
-The method `traverse` calls the lambda expression for each encountered _code
-element_ in the model and prints out the class name prefixed with space
-proportional to the tree depth of the element. The output is shown below.
+The lambda expression passed to the stream's `forEach` method is called for each
+encountered _code element_ in the model, and it prints out the class name
+prefixed with space proportional to the tree depth of the element. The output is
+shown below.
 
 ```text
-class java.lang.reflect.code.op.CoreOp$FuncOp
-  class java.lang.reflect.code.Body
-    class java.lang.reflect.code.Block
-      class java.lang.reflect.code.op.CoreOp$VarOp
-      class java.lang.reflect.code.op.CoreOp$VarOp
-      class java.lang.reflect.code.op.CoreOp$VarAccessOp$VarLoadOp
-      class java.lang.reflect.code.op.CoreOp$VarAccessOp$VarLoadOp
-      class java.lang.reflect.code.op.CoreOp$SubOp
-      class java.lang.reflect.code.op.CoreOp$ReturnOp
+class jdk.incubator.code.dialect.core.CoreOp$FuncOp
+  class jdk.incubator.code.Body
+    class jdk.incubator.code.Block
+      class jdk.incubator.code.dialect.core.CoreOp$VarOp
+      class jdk.incubator.code.dialect.core.CoreOp$VarOp
+      class jdk.incubator.code.dialect.core.CoreOp$VarAccessOp$VarLoadOp
+      class jdk.incubator.code.dialect.core.CoreOp$VarAccessOp$VarLoadOp
+      class jdk.incubator.code.dialect.java.JavaOp$SubOp
+      class jdk.incubator.code.dialect.core.CoreOp$ReturnOp
 ```
 
 We can observe that the top of the tree is the `CoreOp.FuncOp` which contains
 one child, a `Body`, which in turn contains one child, a `Block`, which in turn
 contains a sequence of operations.
 
-The implementation of `traverse` applies the code element to the function
-parameter and then the code element's children are recursively traversed.
+The `CodeElement.elements` method returns a stream constructed with a gathering
+operation that whose integrator recursively traverses code elements:
 
 ```java
-default <T> T traverse(T t, BiFunction<T, CodeElement<?, ?>, T> v) {
-    t = v.apply(t, this);
-    for (C r : children()) {
-        t = r.traverse(t, v);
-    }
+default Stream<CodeElement<?, ?>> elements() {
+    return Stream.of(this).gather(
+            () -> (_, e, downstream) -> traversePreOrder(e, downstream));
+}
 
-    return t;
+private static boolean traversePreOrder(
+        CodeElement<?, ?> e,
+        Gatherer.Downstream<? super CodeElement<?, ?>> d) {
+    if (!d.push(e)) {
+        return false;
+    }
+    for (CodeElement<?, ?> c : e.children()) {
+        if (!traversePreOrder(c, d)) {
+            return false;
+        }
+    }
+    return true;
 }
 ```
 
@@ -221,7 +231,7 @@ of code elements:
 1. up the tree, from child to parent when we calculated the depth of a code
    element; and
 2. down the tree, from parent to children in the implementation of
-   the `traverse` method.
+   the `elements` method.
 
 Later we shall explore traversal of values in code models.
 
@@ -241,13 +251,14 @@ System.out.println(model.toText());
 Which outputs the following text.
 
 ```text
-func @"sub" @loc="19:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="19:5";
-    %3 : Var<double> = var %1 @"b" @loc="19:5";
-    %4 : double = var.load %2 @loc="21:16";
-    %5 : double = var.load %3 @loc="21:20";
-    %6 : double = sub %4 %5 @loc="21:16";
-    return %6 @loc="21:9";
+func @loc="46:5:file:/.../TestExpressionGraphs.java" @"sub"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="46:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="46:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="48:16";
+    %5 : java.type:"double" = var.load %3 @loc="48:20";
+    %6 : java.type:"double" = sub %4 %5 @loc="48:16";
+    return %6 @loc="48:9";
 };
 ```
 
@@ -263,7 +274,7 @@ The code model text shows the code model's root is a function declaration
 function declaration operation's single body and the body's first and only
 block, called the entry block. Then there is a sequence of operations in the
 entry block. For each operation there is an instance of a corresponding Java
-class, all of which extend from the abstract class `java.lang.reflect.code.Op`
+class, all of which extend from the abstract class `jdk.incubator.code.Op`
 and which have already seen when we printed out the classes. Unsurprisingly the
 printed operations and printed operation classes occur in the same order since
 the `toText` method traverses the model in the same order as we traversed.
@@ -273,14 +284,14 @@ the `toText` method traverses the model in the same order as we traversed.
 > present it.
 
 The entry block has two block parameters, `%0` and `%1` each described by a type
-of `double`, which model method `sub`'s initial values for parameters `a`
-and `b`. The method parameters themselves (variables) are modeled as `var`
-operations that are initialized with the corresponding block parameters. The
-result of a `var` operation is value, a _variable value_, whose type is a
-_variable type_, `Var<T>`. A variable value holds another value of type `T`, the
-value of the variable, which can be loaded or stored using variable access
-operations, respectively modeling an expression that denotes a variable and
-assignment to a variable.
+of `java.type:"double"`, which model method `sub`'s initial values for
+parameters `a` and `b`. The method parameters themselves (variables) are modeled
+as `var` operations that are initialized with the corresponding block
+parameters. The result of a `var` operation is value, a _variable value_, whose
+type is a _variable type_, `Var<T>`. A variable value holds another value of
+type `T`, the value of the variable, which can be loaded or stored using
+variable access operations, respectively modeling an expression that denotes a
+variable and assignment to a variable.
 
 > Although `Var<T>` looks like a generic Java type it is not. Just as
 > we can define a set of operations for use in code models we can also
@@ -304,7 +315,7 @@ simple mathematical expression, the distance between two scalar values.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double distance1(double a, double b) {
    return Math.abs(a - b);
 }
@@ -318,14 +329,15 @@ alternatively how is the invocation expression modelled? To help answer this
 question we can print out the code model, like we did previously.
 
 ```text
-func @"distance1" @loc="24:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="24:5";
-    %3 : Var<double> = var %1 @"b" @loc="24:5";
-    %4 : double = var.load %2 @loc="26:25";
-    %5 : double = var.load %3 @loc="26:29";
-    %6 : double = sub %4 %5 @loc="26:25";
-    %7 : double = invoke %6 @"java.lang.Math::abs(double)double" @loc="26:16";
-    return %7 @loc="26:9";
+func @loc="51:5:file:/.../TestExpressionGraphs.java" @"distance1"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="51:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="51:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="53:25";
+    %5 : java.type:"double" = var.load %3 @loc="53:29";
+    %6 : java.type:"double" = sub %4 %5 @loc="53:25";
+    %7 : java.type:"double" = invoke %6 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+    return %7 @loc="53:9";
 };
 ```
 
@@ -354,7 +366,7 @@ variable.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double distance1a(final double a, final double b) {
     final double diff = a - b;
     final double result = Math.abs(diff);
@@ -372,18 +384,19 @@ static double distance1a(final double a, final double b) {
 We can print out the code model for method `distance1a`.
 
 ```text
-func @"distance1a" @loc="29:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="29:5";
-    %3 : Var<double> = var %1 @"b" @loc="29:5";
-    %4 : double = var.load %2 @loc="31:29";
-    %5 : double = var.load %3 @loc="31:33";
-    %6 : double = sub %4 %5 @loc="31:29";
-    %7 : Var<double> = var %6 @"diff" @loc="31:9";
-    %8 : double = var.load %7 @loc="32:40";
-    %9 : double = invoke %8 @"java.lang.Math::abs(double)double" @loc="32:31";
-    %10 : Var<double> = var %9 @"result" @loc="32:9";
-    %11 : double = var.load %10 @loc="33:16";
-    return %11 @loc="33:9";
+func @loc="56:5:file:///.../TestExpressionGraphs.java" @"distance1a"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="56:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="56:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="58:29";
+    %5 : java.type:"double" = var.load %3 @loc="58:33";
+    %6 : java.type:"double" = sub %4 %5 @loc="58:29";
+    %7 : Var<java.type:"double"> = var %6 @loc="58:9" @"diff";
+    %8 : java.type:"double" = var.load %7 @loc="59:40";
+    %9 : java.type:"double" = invoke %8 @loc="59:31" @java.ref:"java.lang.Math::abs(double):double";
+    %10 : Var<java.type:"double"> = var %9 @loc="59:9" @"result";
+    %11 : java.type:"double" = var.load %10 @loc="60:16";
+    return %11 @loc="60:9";
 };
 ```
 
@@ -403,16 +416,18 @@ their results with their operands.
 Here are the two models after transforming.
 
 ```text
-func @"distance1" @loc="24:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : double = sub %0 %1 @loc="26:25";
-    %3 : double = invoke %2 @"java.lang.Math::abs(double)double" @loc="26:16";
-    return %3 @loc="26:9";
+func @loc="51:5:file:///.../TestExpressionGraphs.java" @"distance1"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = sub %0 %1 @loc="53:25";
+    %3 : java.type:"double" = invoke %2 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+    return %3 @loc="53:9";
 };
 
-func @"distance1a" @loc="29:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : double = sub %0 %1 @loc="31:29";
-    %3 : double = invoke %2 @"java.lang.Math::abs(double)double" @loc="32:31";
-    return %3 @loc="33:9";
+func @loc="56:5:file:///.../TestExpressionGraphs.java" @"distance1a"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = sub %0 %1 @loc="58:29";
+    %3 : java.type:"double" = invoke %2 @loc="59:31" @java.ref:"java.lang.Math::abs(double):double";
+    return %3 @loc="60:9";
 };
 ```
 
@@ -430,7 +445,7 @@ operator `? :`.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double distance1b(final double a, final double b) {
     final double diff = a - b;
     // Note, incorrect for negative zero values
@@ -445,32 +460,33 @@ local variable `result`. How do we model conditional operator `? :`? To find out
 let's print out `distance1b`'s model.
 
 ```text
-func @"distance1b" @loc="36:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="36:5";
-    %3 : Var<double> = var %1 @"b" @loc="36:5";
-    %4 : double = var.load %2 @loc="38:29";
-    %5 : double = var.load %3 @loc="38:33";
-    %6 : double = sub %4 %5 @loc="38:29";
-    %7 : Var<double> = var %6 @"diff" @loc="38:9";
-    %8 : double = java.cexpression @loc="40:31"
-        ()boolean -> {
-            %9 : double = var.load %7 @loc="40:31";
-            %10 : double = constant @"0.0" @loc="40:38";
-            %11 : boolean = lt %9 %10 @loc="40:31";
-            yield %11 @loc="40:31";
+func @loc="63:5:file:///.../TestExpressionGraphs.java" @"distance1b"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="63:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="63:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="65:29";
+    %5 : java.type:"double" = var.load %3 @loc="65:33";
+    %6 : java.type:"double" = sub %4 %5 @loc="65:29";
+    %7 : Var<java.type:"double"> = var %6 @loc="65:9" @"diff";
+    %8 : java.type:"double" = java.cexpression @loc="67:31"
+        ()java.type:"boolean" -> {
+            %9 : java.type:"double" = var.load %7 @loc="67:31";
+            %10 : java.type:"double" = constant @loc="67:38" @0.0d;
+            %11 : java.type:"boolean" = lt %9 %10 @loc="67:31";
+            yield %11 @loc="67:31";
         }
-        ()double -> {
-            %12 : double = var.load %7 @loc="40:44";
-            %13 : double = neg %12 @loc="40:43";
-            yield %13 @loc="40:31";
+        ()java.type:"double" -> {
+            %12 : java.type:"double" = var.load %7 @loc="67:44";
+            %13 : java.type:"double" = neg %12 @loc="67:43";
+            yield %13 @loc="67:31";
         }
-        ()double -> {
-            %14 : double = var.load %7 @loc="40:51";
-            yield %14 @loc="40:31";
+        ()java.type:"double" -> {
+            %14 : java.type:"double" = var.load %7 @loc="67:51";
+            yield %14 @loc="67:31";
         };
-    %15 : Var<double> = var %8 @"result" @loc="40:9";
-    %16 : double = var.load %15 @loc="41:16";
-    return %16 @loc="41:9";
+    %15 : Var<java.type:"double"> = var %8 @loc="67:9" @"result";
+    %16 : java.type:"double" = var.load %15 @loc="68:16";
+    return %16 @loc="68:9";
 };
 ```
 
@@ -505,31 +521,32 @@ see later.)
 Printing out the lowered model reveals the replacing code elements.
 
 ```text
-func @"distance1b" @loc="36:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="36:5";
-    %3 : Var<double> = var %1 @"b" @loc="36:5";
-    %4 : double = var.load %2 @loc="38:29";
-    %5 : double = var.load %3 @loc="38:33";
-    %6 : double = sub %4 %5 @loc="38:29";
-    %7 : Var<double> = var %6 @"diff" @loc="38:9";
-    %8 : double = var.load %7 @loc="40:31";
-    %9 : double = constant @"0.0" @loc="40:38";
-    %10 : boolean = lt %8 %9 @loc="40:31";
+func @loc="63:5:file:///.../TestExpressionGraphs.java" @"distance1b"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="63:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="63:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="65:29";
+    %5 : java.type:"double" = var.load %3 @loc="65:33";
+    %6 : java.type:"double" = sub %4 %5 @loc="65:29";
+    %7 : Var<java.type:"double"> = var %6 @loc="65:9" @"diff";
+    %8 : java.type:"double" = var.load %7 @loc="67:31";
+    %9 : java.type:"double" = constant @loc="67:38" @0.0d;
+    %10 : java.type:"boolean" = lt %8 %9 @loc="67:31";
     cbranch %10 ^block_1 ^block_2;
   
   ^block_1:
-    %11 : double = var.load %7 @loc="40:44";
-    %12 : double = neg %11 @loc="40:43";
+    %11 : java.type:"double" = var.load %7 @loc="67:44";
+    %12 : java.type:"double" = neg %11 @loc="67:43";
     branch ^block_3(%12);
   
   ^block_2:
-    %13 : double = var.load %7 @loc="40:51";
+    %13 : java.type:"double" = var.load %7 @loc="67:51";
     branch ^block_3(%13);
   
-  ^block_3(%14 : double):
-    %15 : Var<double> = var %14 @"result" @loc="40:9";
-    %16 : double = var.load %15 @loc="41:16";
-    return %16 @loc="41:9";
+  ^block_3(%14 : java.type:"double"):
+    %15 : Var<java.type:"double"> = var %14 @loc="67:9" @"result";
+    %16 : java.type:"double" = var.load %15 @loc="68:16";
+    return %16 @loc="68:9";
 };
 ```
 
@@ -537,7 +554,7 @@ We can clearly see three new blocks have been added to the `func`
 operation's body, `^block_1`, `^block_2`, `^block_3`, and they are
 interconnected. They form a _control-flow graph_.
 
-The `func` operation's body's entry block contains the same operations in the
+The `func` operation body's entry block contains the same operations in the
 prior model up to the `java.cexpression` operation. Then all operations, except
 the last, in the first body of the `java.cexpression` operation have been
 appended to the entry block. All operations, except the last, in the second body
@@ -546,7 +563,7 @@ operations, except the last, in the third body of the `java.cexpression`
 operation have been appended to `^block_2`. Finally `^block_3` contains the same
 operations in the prior model that occur after the `java.cexpression` operation.
 
-The last operations in each body of the `java.cexpression` operation,
+The last operation in each body of the `java.cexpression` operation,
 `yield` operations, are replaced with a branch operations. The entry block
 branches conditionally to a _successor_ block, either `^block_1` or `^block_2`
 based on its boolean operand. Both of those blocks branch unconditionally to
@@ -574,21 +591,22 @@ Transforming the lowered model with the SSA transformation (presented earlier)
 results in a simpler model.
 
 ```text
-func @"distance1b" @loc="36:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : double = sub %0 %1 @loc="38:29";
-    %3 : double = constant @"0.0" @loc="40:38";
-    %4 : boolean = lt %2 %3 @loc="40:31";
+func @loc="63:5:file:///.../TestExpressionGraphs.java" @"distance1b"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = sub %0 %1 @loc="65:29";
+    %3 : java.type:"double" = constant @loc="67:38" @0.0d;
+    %4 : java.type:"boolean" = lt %2 %3 @loc="67:31";
     cbranch %4 ^block_1 ^block_2;
   
   ^block_1:
-    %5 : double = neg %2 @loc="40:43";
+    %5 : java.type:"double" = neg %2 @loc="67:43";
     branch ^block_3(%5);
   
   ^block_2:
     branch ^block_3(%2);
   
-  ^block_3(%6 : double):
-    return %6 @loc="41:9";
+  ^block_3(%6 : java.type:"double"):
+    return %6 @loc="68:9";
 };
 ```
 
@@ -604,7 +622,7 @@ N-dimensional points.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double distanceN(double[] a, double[] b) {
     double sum = 0d;
     for (int i = 0; i < a.length; i++) {
@@ -622,49 +640,50 @@ How do we model the `for` statement? To find out let's print out `distanceN`'s
 model.
 
 ```text
-func @"distanceN" @loc="44:5:file:/.../ExpressionGraphs.java" (%0 : double[], %1 : double[])double -> {
-    %2 : Var<double[]> = var %0 @"a" @loc="44:5";
-    %3 : Var<double[]> = var %1 @"b" @loc="44:5";
-    %4 : double = constant @"0.0" @loc="46:22";
-    %5 : Var<double> = var %4 @"sum" @loc="46:9";
-    java.for @loc="47:9"
-        ()Var<int> -> {
-            %6 : int = constant @"0" @loc="47:22";
-            %7 : Var<int> = var %6 @"i" @loc="47:14";
-            yield %7 @loc="47:9";
+func @loc="71:5:file:///.../TestExpressionGraphs.java" @"distanceN"
+(%0 : java.type:"double[]", %1 : java.type:"double[]")java.type:"double" -> {
+    %2 : Var<java.type:"double[]"> = var %0 @loc="71:5" @"a";
+    %3 : Var<java.type:"double[]"> = var %1 @loc="71:5" @"b";
+    %4 : java.type:"double" = constant @loc="73:22" @0.0d;
+    %5 : Var<java.type:"double"> = var %4 @loc="73:9" @"sum";
+    java.for @loc="74:9"
+        ()Var<java.type:"int"> -> {
+            %6 : java.type:"int" = constant @loc="74:22" @0;
+            %7 : Var<java.type:"int"> = var %6 @loc="74:14" @"i";
+            yield %7 @loc="74:9";
         }
-        (%8 : Var<int>)boolean -> {
-            %9 : int = var.load %8 @loc="47:25";
-            %10 : double[] = var.load %2 @loc="47:29";
-            %11 : int = array.length %10 @loc="47:29";
-            %12 : boolean = lt %9 %11 @loc="47:25";
-            yield %12 @loc="47:9";
+        (%8 : Var<java.type:"int">)java.type:"boolean" -> {
+            %9 : java.type:"int" = var.load %8 @loc="74:25";
+            %10 : java.type:"double[]" = var.load %2 @loc="74:29";
+            %11 : java.type:"int" = array.length %10 @loc="74:29";
+            %12 : java.type:"boolean" = lt %9 %11 @loc="74:25";
+            yield %12 @loc="74:9";
         }
-        (%13 : Var<int>)void -> {
-            %14 : int = var.load %13 @loc="47:39";
-            %15 : int = constant @"1" @loc="47:39";
-            %16 : int = add %14 %15 @loc="47:39";
-            var.store %13 %16 @loc="47:39";
-            yield @loc="47:9";
+        (%13 : Var<java.type:"int">)java.type:"void" -> {
+            %14 : java.type:"int" = var.load %13 @loc="74:39";
+            %15 : java.type:"int" = constant @loc="74:39" @1;
+            %16 : java.type:"int" = add %14 %15 @loc="74:39";
+            var.store %13 %16 @loc="74:39";
+            yield @loc="74:9";
         }
-        (%17 : Var<int>)void -> {
-            %18 : double = var.load %5 @loc="48:13";
-            %19 : double[] = var.load %2 @loc="48:29";
-            %20 : int = var.load %17 @loc="48:31";
-            %21 : double = array.load %19 %20 @loc="48:29";
-            %22 : double[] = var.load %3 @loc="48:36";
-            %23 : int = var.load %17 @loc="48:38";
-            %24 : double = array.load %22 %23 @loc="48:36";
-            %25 : double = sub %21 %24 @loc="48:29";
-            %26 : double = constant @"2.0" @loc="48:42";
-            %27 : double = invoke %25 %26 @"java.lang.Math::pow(double, double)double" @loc="48:20";
-            %28 : double = add %18 %27 @loc="48:13";
-            var.store %5 %28 @loc="48:13";
-            java.continue @loc="47:9";
+        (%17 : Var<java.type:"int">)java.type:"void" -> {
+            %18 : java.type:"double" = var.load %5 @loc="75:13";
+            %19 : java.type:"double[]" = var.load %2 @loc="75:29";
+            %20 : java.type:"int" = var.load %17 @loc="75:31";
+            %21 : java.type:"double" = array.load %19 %20 @loc="75:29";
+            %22 : java.type:"double[]" = var.load %3 @loc="75:36";
+            %23 : java.type:"int" = var.load %17 @loc="75:38";
+            %24 : java.type:"double" = array.load %22 %23 @loc="75:36";
+            %25 : java.type:"double" = sub %21 %24 @loc="75:29";
+            %26 : java.type:"double" = constant @loc="75:42" @2.0d;
+            %27 : java.type:"double" = invoke %25 %26 @loc="75:20" @java.ref:"java.lang.Math::pow(double, double):double";
+            %28 : java.type:"double" = add %18 %27 @loc="75:13";
+            var.store %5 %28 @loc="75:13";
+            java.continue @loc="74:9";
         };
-    %29 : double = var.load %5 @loc="50:26";
-    %30 : double = invoke %29 @"java.lang.Math::sqrt(double)double" @loc="50:16";
-    return %30 @loc="50:9";
+    %29 : java.type:"double" = var.load %5 @loc="77:26";
+    %30 : java.type:"double" = invoke %29 @loc="77:16" @java.ref:"java.lang.Math::sqrt(double):double";
+    return %30 @loc="77:9";
 };
 ```
 
@@ -683,7 +702,7 @@ which also states (in section [14.14.1][jls-14.14.1]):
 > _Expression_, a _Statement_, and some update code repeatedly until the
 > value of the _Expression_ is false.
 
-[jls-14.14.1]: https://docs.oracle.com/javase/specs/jls/se22/html/jls-14.html#jls-14.14.1
+[jls-14.14.1]: https://docs.oracle.com/javase/specs/jls/se25/html/jls-14.html#jls-14.14.1
 
 We can see that the first body corresponds to the initialization code. It yields
 a variable value modeling local variable `i`. This variable value then _flows_
@@ -692,8 +711,8 @@ as a parameter to all the other bodies and therefore they can access `i`.
 > In general a for loop can declare zero or more local variables and
 > therefore the first body may yield zero or more variable values. Two or more
 > variable values are wrapped in a yielded tuple value, since code
-> models do not explicitly support the grouping of multiple return values or an
-> operation producing multiple results.
+> models do not intrinsically support the grouping of multiple return values or
+> an operation producing multiple results.
 
 The second body corresponds to the _Expression_ that models the code checking
 whether local variable `i` is less than the array length. The third body
@@ -707,48 +726,49 @@ transformation. Printing out the lowered model reveals the replacing code
 elements.
 
 ```text
-func @"distanceN" @loc="44:5:file:/.../ExpressionGraphs.java" (%0 : double[], %1 : double[])double -> {
-    %2 : Var<double[]> = var %0 @"a" @loc="44:5";
-    %3 : Var<double[]> = var %1 @"b" @loc="44:5";
-    %4 : double = constant @"0.0" @loc="46:22";
-    %5 : Var<double> = var %4 @"sum" @loc="46:9";
-    %6 : int = constant @"0" @loc="47:22";
-    %7 : Var<int> = var %6 @"i" @loc="47:14";
+func @loc="71:5:file:///.../TestExpressionGraphs.java" @"distanceN"
+(%0 : java.type:"double[]", %1 : java.type:"double[]")java.type:"double" -> {
+    %2 : Var<java.type:"double[]"> = var %0 @loc="71:5" @"a";
+    %3 : Var<java.type:"double[]"> = var %1 @loc="71:5" @"b";
+    %4 : java.type:"double" = constant @loc="73:22" @0.0d;
+    %5 : Var<java.type:"double"> = var %4 @loc="73:9" @"sum";
+    %6 : java.type:"int" = constant @loc="74:22" @0;
+    %7 : Var<java.type:"int"> = var %6 @loc="74:14" @"i";
     branch ^block_1;
   
   ^block_1:
-    %8 : int = var.load %7 @loc="47:25";
-    %9 : double[] = var.load %2 @loc="47:29";
-    %10 : int = array.length %9 @loc="47:29";
-    %11 : boolean = lt %8 %10 @loc="47:25";
+    %8 : java.type:"int" = var.load %7 @loc="74:25";
+    %9 : java.type:"double[]" = var.load %2 @loc="74:29";
+    %10 : java.type:"int" = array.length %9 @loc="74:29";
+    %11 : java.type:"boolean" = lt %8 %10 @loc="74:25";
     cbranch %11 ^block_2 ^block_4;
   
   ^block_2:
-    %12 : double = var.load %5 @loc="48:13";
-    %13 : double[] = var.load %2 @loc="48:29";
-    %14 : int = var.load %7 @loc="48:31";
-    %15 : double = array.load %13 %14;
-    %16 : double[] = var.load %3 @loc="48:36";
-    %17 : int = var.load %7 @loc="48:38";
-    %18 : double = array.load %16 %17;
-    %19 : double = sub %15 %18 @loc="48:29";
-    %20 : double = constant @"2.0" @loc="48:42";
-    %21 : double = invoke %19 %20 @"java.lang.Math::pow(double, double)double" @loc="48:20";
-    %22 : double = add %12 %21 @loc="48:13";
-    var.store %5 %22 @loc="48:13";
+    %12 : java.type:"double" = var.load %5 @loc="75:13";
+    %13 : java.type:"double[]" = var.load %2 @loc="75:29";
+    %14 : java.type:"int" = var.load %7 @loc="75:31";
+    %15 : java.type:"double" = array.load %13 %14 @loc="75:29";
+    %16 : java.type:"double[]" = var.load %3 @loc="75:36";
+    %17 : java.type:"int" = var.load %7 @loc="75:38";
+    %18 : java.type:"double" = array.load %16 %17 @loc="75:36";
+    %19 : java.type:"double" = sub %15 %18 @loc="75:29";
+    %20 : java.type:"double" = constant @loc="75:42" @2.0d;
+    %21 : java.type:"double" = invoke %19 %20 @loc="75:20" @java.ref:"java.lang.Math::pow(double, double):double";
+    %22 : java.type:"double" = add %12 %21 @loc="75:13";
+    var.store %5 %22 @loc="75:13";
     branch ^block_3;
   
   ^block_3:
-    %23 : int = var.load %7 @loc="47:39";
-    %24 : int = constant @"1" @loc="47:39";
-    %25 : int = add %23 %24 @loc="47:39";
-    var.store %7 %25 @loc="47:39";
+    %23 : java.type:"int" = var.load %7 @loc="74:39";
+    %24 : java.type:"int" = constant @loc="74:39" @1;
+    %25 : java.type:"int" = add %23 %24 @loc="74:39";
+    var.store %7 %25 @loc="74:39";
     branch ^block_1;
   
   ^block_4:
-    %26 : double = var.load %5 @loc="50:26";
-    %27 : double = invoke %26 @"java.lang.Math::sqrt(double)double" @loc="50:16";
-    return %27 @loc="50:9";
+    %26 : java.type:"double" = var.load %5 @loc="77:26";
+    %27 : java.type:"double" = invoke %26 @loc="77:16" @java.ref:"java.lang.Math::sqrt(double):double";
+    return %27 @loc="77:9";
 };
 ```
 
@@ -765,47 +785,48 @@ Transforming the lowered model with the SSA transformation again results in a
 simpler model.
 
 ```text
-func @"distanceN" @loc="44:5:file:/.../ExpressionGraphs.java" (%0 : double[], %1 : double[])double -> {
-    %2 : double = constant @"0.0" @loc="46:22";
-    %3 : int = constant @"0" @loc="47:22";
-    branch ^block_1(%2, %3);
+func @loc="71:5:file:///.../TestExpressionGraphs.java" @"distanceN"
+(%0 : java.type:"double[]", %1 : java.type:"double[]")java.type:"double" -> {
+    %2 : java.type:"double" = constant @loc="73:22" @0.0d;
+    %3 : java.type:"int" = constant @loc="74:22" @0;
+    branch ^block_1(%3, %2);
   
-  ^block_1(%4 : double, %5 : int):
-    %6 : int = array.length %0 @loc="47:29";
-    %7 : boolean = lt %5 %6 @loc="47:25";
+  ^block_1(%4 : java.type:"int", %5 : java.type:"double"):
+    %6 : java.type:"int" = array.length %0 @loc="74:29";
+    %7 : java.type:"boolean" = lt %4 %6 @loc="74:25";
     cbranch %7 ^block_2 ^block_4;
   
   ^block_2:
-    %8 : double = array.load %0 %5;
-    %9 : double = array.load %1 %5;
-    %10 : double = sub %8 %9 @loc="48:29";
-    %11 : double = constant @"2.0" @loc="48:42";
-    %12 : double = invoke %10 %11 @"java.lang.Math::pow(double, double)double" @loc="48:20";
-    %13 : double = add %4 %12 @loc="48:13";
+    %8 : java.type:"double" = array.load %0 %4 @loc="75:29";
+    %9 : java.type:"double" = array.load %1 %4 @loc="75:36";
+    %10 : java.type:"double" = sub %8 %9 @loc="75:29";
+    %11 : java.type:"double" = constant @loc="75:42" @2.0d;
+    %12 : java.type:"double" = invoke %10 %11 @loc="75:20" @java.ref:"java.lang.Math::pow(double, double):double";
+    %13 : java.type:"double" = add %5 %12 @loc="75:13";
     branch ^block_3;
   
   ^block_3:
-    %14 : int = constant @"1" @loc="47:39";
-    %15 : int = add %5 %14 @loc="47:39";
-    branch ^block_1(%13, %15);
+    %14 : java.type:"int" = constant @loc="74:39" @1;
+    %15 : java.type:"int" = add %4 %14 @loc="74:39";
+    branch ^block_1(%15, %13);
   
   ^block_4:
-    %16 : double = invoke %4 @"java.lang.Math::sqrt(double)double" @loc="50:16";
-    return %16 @loc="50:9";
+    %16 : java.type:"double" = invoke %5 @loc="77:16" @java.ref:"java.lang.Math::sqrt(double):double";
+    return %16 @loc="77:9";
 };
 ```
 
 `^block_1` now has two block parameters, `%4` and `%5`, corresponding to the
-values of local variables `sum` and `i` respectively for the current loop
+values of local variables `i` and `sum` respectively for the current loop
 iteration. The (back) branch in `^block_3` passes the values to be used for the
 next loop iteration as block arguments.
 
 > A value can be used by an operation if it is defined earlier in the same
 > block or defined in a dominating block. This is why the `add` operation
-> in `^block_2` or the `invoke` operation in `^block_4` can use `%4`, since 
+> in `^block_2` or the `invoke` operation in `^block_4` can use `%5`, since
 > `^block_1` dominates `^block_2` and `^block_4`.
 
-> Structured control flow operations and pure SSA form are not mutually
+> Operations with structured control flow and pure SSA form are not mutually
 > exclusive. Although we will not model Java expressions and statement
 > with control flow in such a manner the code model design itself does not have
 > such limitations (see the [Triton example][Triton-example] for using code
@@ -968,29 +989,30 @@ System.out.println(returnGraph.transformValues(v -> printValue(names, v)));
 [//]: # (@formatter:on)
 
 ```text
-@CodeReflection
+@Reflect
 static double distance1(double a, double b) {
    return Math.abs(a - b);
 }
 
-func @"distance1" @loc="24:5:file:/.../ExpressionGraphs.java" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"a" @loc="24:5";
-    %3 : Var<double> = var %1 @"b" @loc="24:5";
-    %4 : double = var.load %2 @loc="26:25";
-    %5 : double = var.load %3 @loc="26:29";
-    %6 : double = sub %4 %5 @loc="26:25";
-    %7 : double = invoke %6 @"java.lang.Math::abs(double)double" @loc="26:16";
-    %8 : void = return %7 @loc="26:9";
+func @loc="51:5:file:///.../TestExpressionGraphs.java"
+@"distance1" (%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="51:5" @"a";
+    %3 : Var<java.type:"double"> = var %1 @loc="51:5" @"b";
+    %4 : java.type:"double" = var.load %2 @loc="53:25";
+    %5 : java.type:"double" = var.load %3 @loc="53:29";
+    %6 : java.type:"double" = sub %4 %5 @loc="53:25";
+    %7 : java.type:"double" = invoke %6 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+    %8 : java.type:"void" = return %7 @loc="53:9";
 };
 
-%8 : void = return %7 @loc="26:9";
-└── %7 : double = invoke %6 @"java.lang.Math::abs(double)double" @loc="26:16";
-    └── %6 : double = sub %4 %5 @loc="26:25";
-        ├── %4 : double = var.load %2 @loc="26:25";
-        │   └── %2 : Var<double> = var %0 @"a" @loc="24:5";
+%8 : java.type:"void" = return %7 @loc="53:9";
+└── %7 : java.type:"double" = invoke %6 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+    └── %6 : java.type:"double" = sub %4 %5 @loc="53:25";
+        ├── %4 : java.type:"double" = var.load %2 @loc="53:25";
+        │   └── %2 : Var<java.type:"double"> = var %0 @loc="51:5" @"a";
         │       └── %0 <block parameter>
-        └── %5 : double = var.load %3 @loc="26:29";
-            └── %3 : Var<double> = var %1 @"b" @loc="24:5";
+        └── %5 : java.type:"double" = var.load %3 @loc="53:29";
+            └── %3 : Var<java.type:"double"> = var %1 @loc="51:5" @"b";
                 └── %1 <block parameter>
 ```
 
@@ -1019,24 +1041,24 @@ for (Block.Parameter parameter : model.parameters()) {
 [//]: # (@formatter:on)
 
 ```text
-@CodeReflection
+@Reflect
 static double distance1(double a, double b) {
    return Math.abs(a - b);
 }
 
 %0 <block parameter>
-└── %2 : Var<double> = var %0 @"a" @loc="24:5";
-    └── %4 : double = var.load %2 @loc="26:25";
-        └── %6 : double = sub %4 %5 @loc="26:25";
-            └── %7 : double = invoke %6 @"java.lang.Math::abs(double)double" @loc="26:16";
-                └── %8 : void = return %7 @loc="26:9";
+└── %2 : Var<java.type:"double"> = var %0 @loc="51:5" @"a";
+    └── %4 : java.type:"double" = var.load %2 @loc="53:25";
+        └── %6 : java.type:"double" = sub %4 %5 @loc="53:25";
+            └── %7 : java.type:"double" = invoke %6 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+                └── %8 : java.type:"void" = return %7 @loc="53:9";
 
 %1 <block parameter>
-└── %3 : Var<double> = var %1 @"b" @loc="24:5";
-    └── %5 : double = var.load %3 @loc="26:29";
-        └── %6 : double = sub %4 %5 @loc="26:25";
-            └── %7 : double = invoke %6 @"java.lang.Math::abs(double)double" @loc="26:16";
-                └── %8 : void = return %7 @loc="26:9";
+└── %3 : Var<java.type:"double"> = var %1 @loc="51:5" @"b";
+    └── %5 : java.type:"double" = var.load %3 @loc="53:29";
+        └── %6 : java.type:"double" = sub %4 %5 @loc="53:25";
+            └── %7 : java.type:"double" = invoke %6 @loc="53:16" @java.ref:"java.lang.Math::abs(double):double";
+                └── %8 : java.type:"void" = return %7 @loc="53:9";
 ```
 
 The use graph follows the same order as the operations in the function
@@ -1054,8 +1076,8 @@ static Map<Value, Node<Value>> expressionGraphs(CoreOp.FuncOp f) {
 }
 
 static Map<Value, Node<Value>> expressionGraphs(Body b) {
-    // Traverse the model building structurally shared expression graphs
-    return b.traverse(new LinkedHashMap<>(), (graphs, codeElement) -> {
+    LinkedHashMap<Value, Node<Value>> graphs = new LinkedHashMap<>();
+    b.elements().forEach(codeElement -> {
         switch (codeElement) {
             case Body _ -> {
                 // Do nothing
@@ -1080,8 +1102,8 @@ static Map<Value, Node<Value>> expressionGraphs(Body b) {
                 graphs.put(op.result(), new Node<>(op.result(), edges));
             }
         }
-        return graphs;
     });
+    return graphs;
 }
 ```
 
@@ -1177,7 +1199,7 @@ For the purposes of this section we shall focus on another method,
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static double squareDiff(double a, double b) {
     // a^2 - b^2 = (a + b) * (a - b)
     final double plus = a + b;
@@ -1194,25 +1216,25 @@ contains one such root expression graph associated with the `return` operation.
 Here it is.
 
 ```text
-%15 : void = return %14 @loc="58:9";
-└── %14 : double = mul %12 %13 @loc="58:16";
-    ├── %12 : double = var.load %7 @loc="58:16";
-    │   └── %7 : Var<double> = var %6 @"plus" @loc="56:9";
-    │       └── %6 : double = add %4 %5 @loc="56:29";
-    │           ├── %4 : double = var.load %2 @loc="56:29";
-    │           │   └── %2 : Var<double> = var %0 @"a" @loc="53:5";
+%15 : java.type:"void" = return %14 @loc="85:9";
+└── %14 : java.type:"double" = mul %12 %13 @loc="85:16";
+    ├── %12 : java.type:"double" = var.load %7 @loc="85:16";
+    │   └── %7 : Var<java.type:"double"> = var %6 @loc="83:9" @"plus";
+    │       └── %6 : java.type:"double" = add %4 %5 @loc="83:29";
+    │           ├── %4 : java.type:"double" = var.load %2 @loc="83:29";
+    │           │   └── %2 : Var<java.type:"double"> = var %0 @loc="80:5" @"a";
     │           │       └── %0 <block parameter>
-    │           └── %5 : double = var.load %3 @loc="56:33";
-    │               └── %3 : Var<double> = var %1 @"b" @loc="53:5";
+    │           └── %5 : java.type:"double" = var.load %3 @loc="83:33";
+    │               └── %3 : Var<java.type:"double"> = var %1 @loc="80:5" @"b";
     │                   └── %1 <block parameter>
-    └── %13 : double = var.load %11 @loc="58:23";
-        └── %11 : Var<double> = var %10 @"minus" @loc="57:9";
-            └── %10 : double = sub %8 %9 @loc="57:30";
-                ├── %8 : double = var.load %2 @loc="57:30";
-                │   └── %2 : Var<double> = var %0 @"a" @loc="53:5";
+    └── %13 : java.type:"double" = var.load %11 @loc="85:23";
+        └── %11 : Var<java.type:"double"> = var %10 @loc="84:9" @"minus";
+            └── %10 : java.type:"double" = sub %8 %9 @loc="84:30";
+                ├── %8 : java.type:"double" = var.load %2 @loc="84:30";
+                │   └── %2 : Var<java.type:"double"> = var %0 @loc="80:5" @"a";
                 │       └── %0 <block parameter>
-                └── %9 : double = var.load %3 @loc="57:34";
-                    └── %3 : Var<double> = var %1 @"b" @loc="53:5";
+                └── %9 : java.type:"double" = var.load %3 @loc="84:34";
+                    └── %3 : Var<java.type:"double"> = var %1 @loc="80:5" @"b";
                         └── %1 <block parameter>
 ```
 
@@ -1266,8 +1288,9 @@ static Map<Value, Node<Value>> prunedExpressionGraphs(CoreOp.FuncOp f) {
 }
 
 static Map<Value, Node<Value>> prunedExpressionGraphs(Body b) {
+    LinkedHashMap<Value, Node<Value>> graphs = new LinkedHashMap<>();
     // Traverse the model building structurally shared expression graphs
-    return b.traverse(new LinkedHashMap<>(), (graphs, codeElement) -> {
+    b.elements().forEach(codeElement -> {
         switch (codeElement) {
             case Body _ -> { ... }
             case Block block -> { ... }
@@ -1285,9 +1308,10 @@ static Map<Value, Node<Value>> prunedExpressionGraphs(Body b) {
             }
             case Op op -> { ... }
         }
-        return graphs;
     });
+    return graphs;
 }
+
 ```
 [//]: # (@formatter:on)
 
@@ -1307,7 +1331,7 @@ edge corresponding to the first operand, the value to store.
 With these enhancements we can now compute three root expression graphs.
 
 ```text
-@CodeReflection
+@Reflect
 static double squareDiff(double a, double b) {
     // a^2 - b^2 = (a + b) * (a - b)
     final double plus = a + b;
@@ -1315,20 +1339,20 @@ static double squareDiff(double a, double b) {
     return plus * minus;
 }
 
-%7 : Var<double> = var %6 @"plus" @loc="56:9";
-└── %6 : double = add %4 %5 @loc="56:29";
-    ├── %4 : double = var.load %2 @loc="56:29";
-    └── %5 : double = var.load %3 @loc="56:33";
+%7 : Var<java.type:"double"> = var %6 @loc="83:9" @"plus";
+└── %6 : java.type:"double" = add %4 %5 @loc="83:29";
+    ├── %4 : java.type:"double" = var.load %2 @loc="83:29";
+    └── %5 : java.type:"double" = var.load %3 @loc="83:33";
 
-%11 : Var<double> = var %10 @"minus" @loc="57:9";
-└── %10 : double = sub %8 %9 @loc="57:30";
-    ├── %8 : double = var.load %2 @loc="57:30";
-    └── %9 : double = var.load %3 @loc="57:34";
+%11 : Var<java.type:"double"> = var %10 @loc="84:9" @"minus";
+└── %10 : java.type:"double" = sub %8 %9 @loc="84:30";
+    ├── %8 : java.type:"double" = var.load %2 @loc="84:30";
+    └── %9 : java.type:"double" = var.load %3 @loc="84:34";
 
-%15 : void = return %14 @loc="58:9";
-└── %14 : double = mul %12 %13 @loc="58:16";
-    ├── %12 : double = var.load %7 @loc="58:16";
-    └── %13 : double = var.load %11 @loc="58:23";
+%15 : java.type:"void" = return %14 @loc="85:9";
+└── %14 : java.type:"double" = mul %12 %13 @loc="85:16";
+    ├── %12 : java.type:"double" = var.load %7 @loc="85:16";
+    └── %13 : java.type:"double" = var.load %11 @loc="85:23";
 ```
 
 Notice how the three root expression graphs correspond, in order, to the three
