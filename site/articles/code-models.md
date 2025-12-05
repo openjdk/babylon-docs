@@ -212,12 +212,12 @@ default Stream<CodeElement<?, ?>> elements() {
 
 private static boolean traversePreOrder(
         CodeElement<?, ?> e,
-        Gatherer.Downstream<? super CodeElement<?, ?>> v) {
-    if (!v.push(e)) {
+        Gatherer.Downstream<? super CodeElement<?, ?>> d) {
+    if (!d.push(e)) {
         return false;
     }
     for (CodeElement<?, ?> c : e.children()) {
-        if (!traversePreOrder(c, v)) {
+        if (!traversePreOrder(c, d)) {
             return false;
         }
     }
