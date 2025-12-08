@@ -1,12 +1,14 @@
 # Automatic differentiation of Java code using Code Reflection
+
 #### Paul Sandoz {.author}
-#### February 2024 {.date}
+
+#### February 2024, Updated Dec 2025 {.date}
 
 In this article we will explain what is automatic differentiation, why it is
 useful, and how we can use Code Reflection to help implement automatic
 differentiation of Java methods.
 
-Code Reflection is a Java platform feature being researched and developed under 
+Code Reflection is a Java platform feature being researched and developed under
 OpenJDK Project [Babylon](https://openjdk.org/projects/babylon/).
 
 We will introduce Code Reflection concepts and APIs as we explain the problem
@@ -63,21 +65,21 @@ especially so for machine learning models. Computers are ideally suited to this
 mechanical task.
 
 To automatically differentiate a mathematical function written as a Java
-method, `f` say, we need to write a Java program, `D` say, that implements the
-rules of differentiation and applies those rules to a *symbolic representation*
+method, `f` say, we need to write a Java library that implements the rules of
+differentiation and applies those rules to a *symbolic representation*
 of `f` to produce the differential method `f'`.
 
-Program `D` can use *Code Reflection* to obtain a symbolic representation of
-method `f`, called a *code model*. `D` can then traverse symbolic information
+The library can use *Code Reflection* to obtain a symbolic representation of
+method `f`, called a *code model*, which can then traverse symbolic information
 in `f`'s code model, *operations*, and apply the rules of differentiation to
 those operations. For example, operations may be mathematical operations,
 representing addition or multiplication, or invocation operations representing
 invocations to Java methods that implement transcendental functions (such as
 method `java.lang.Math::sin`).
 
-`D` will produce a new code model, representing `f`', containing operations that
-compute the differential, which can then be compiled to bytecode and invoked as
-a Java program.
+The library will produce a new code model, representing `f`', containing
+operations that compute the differential, which can then be compiled to bytecode
+and invoked as a Java program.
 
 There are two approaches to automatic differentiation, forward-mode and
 reverse-mode. For `N` independent variables, forward-mode automatic
@@ -86,29 +88,28 @@ therefore `N` method calls to produce a gradient. Reverse-mode automatic
 differentiation does not have these limitations, although it may be less
 efficient for fewer independent variables.
 
-Program `D` could be encapsulated in a Java library. We might ideally use it
-like this:
+Ideally a user might use the library like this:
 
 ```java
 
-@CodeReflection
+@Reflect
 double f(double x, double y) {
     return x * (-sin(x * y) + y) * 4;
 }
 
-Function<double[], double[]> g_f = AD.gradientFunction(this::f);
+Method fm = T.class.getDeclaredMethod("f", double.class, double.class);
+Function<double[], double[]> g_f = AD.gradientFunction(fm);
 double[] g = g_f.apply(new double[]{x, y});
 ```
 
-We annotate our function to be differentiated, method `f`,
-with `@CodeReflection`. This ensures there is a code model available for `f`,
-and that it is accessible under similar access control rules as for its
-invocation . Then we call the method `AD.gradientFunction` passing `f` as a
-method reference. The method reference is targeted to a code reflection type
-whose instance gives access to `f`'s code model.
+We annotate our function to be differentiated, method `f`, with `@Reflect`. This
+ensures there is a code model available for `f`, and that it is accessible under
+similar access control rules as for its invocation. Using the reflection API we
+find the `java.lang.reflect.Method` instance of `f`, `fm`, and then call the
+method `AD.gradientFunction` passing `fm` as an argument.
 
-How can the library author of method `gradientFunction` differentiate
-method `f`?
+How can the library author of method `gradientFunction` differentiate method
+`f`?
 
 ## Implementing forward-mode automatic differentiation
 
@@ -131,13 +132,13 @@ independent variables, `x` and `y`.
 
 ```java
 
-@CodeReflection
+@Reflect
 static double f(double x, double y) {
     return x * (-Math.sin(x * y) + y) * 4.0d;
 }
 ```
 
-It is annotated it with `@CodeReflection`. When it is compiled a code model will
+It is annotated it with `@Reflect`. When it is compiled a code model will
 be generated and made accessible at run time via reflection.
 
 We can also write, by hand, the partial derivatives of `f` with respect to `x`
@@ -155,25 +156,25 @@ static double df_dy(double x, double y) {
 
 ### Obtaining a code model
 
-Fundamentally, we need to implement a method that accepts a code model and a
-reference to an independent variable to differentiate against, and produces a
-new code model that is the partial derivative of the input. We will focus on
-this aspect, although it is not as user-friendly as the prior example (
-using program `D`, where we can observe the author only minimally used the Code
-Reflection API to annotate their method).
+We need to implement a method that accepts a code model and a reference to an
+independent variable to differentiate against, and produces a new code model
+that is the partial derivative of the input. We will focus on this aspect,
+although it is not as user-friendly as the prior example (using program `D`,
+where we can observe the author only minimally used the Code Reflection API to
+annotate their method).
 
 First let's assume `f` is declared as a static method in a class `T`, say. To
-obtain its code model using reflection we would do this.
+obtain its code model using reflection we do this.
 
 ```java
 Method fm = T.class.getDeclaredMethod("f", double.class, double.class);
-Optional<CoreOps.FuncOp> o = fm.getCodeModel();
+Optional<CoreOps.FuncOp> o = Op.ofMethod(fm);
 CoreOps.FuncOp fcm = o.orElseThrow();
 ```
 
 Using the reflection API we find the `java.lang.reflect.Method` instance of `f`,
-and then ask it for its code model by invoking the method `getCodeModel`. Only
-methods annotated with `@CodeReflection` will have code models, hence this
+and then obtain its code model by invoking the method `Op.ofMethod`. Only
+methods annotated with `@Reflect` will have code models, hence this
 method is partial.
 
 `f`'s code model is represented as an instance of `CoreOps.FuncOp`,
@@ -195,11 +196,11 @@ term "operation" in a more conventional sense, such as arithmetic operations.
 However, given the structure described above, there is no need to limit
 ourselves to this conventional sense. We are free to define an operation whose
 operational semantics *declare* a function (instances of `CoreOps.FuncOp`),
-model a Java lambda expression (instances of `CoreOps.LambdaOp`), or model a
-Java `try` statement (instances of `ExtendedOps.JavaTryOp`).
+model a Java lambda expression (instances of `JavaOp.LambdaOp`), or model a
+Java `try` statement (instances of `JavaOp.TryOp`).
 
-What does the code model of `f` look like? We can serialize its in-memory form (
-the instance of `CoreOps.FuncOp`) to a textual form.
+What does the code model of `f` look like? We can serialize its in-memory form
+(the instance of `CoreOps.FuncOp`) to a textual form.
 
 ```java
 System.out.println(fcm.toText());
@@ -208,21 +209,22 @@ System.out.println(fcm.toText());
 Which prints the following text.
 
 ```text
-func @"f" (%0 : double, %1 : double)double -> {
-    %2 : Var<double> = var %0 @"x";
-    %3 : Var<double> = var %1 @"y";
-    %4 : double = var.load %2;
-    %5 : double = var.load %2;
-    %6 : double = var.load %3;
-    %7 : double = mul %5 %6;
-    %8 : double = invoke %7 @"java.lang.Math::sin(double)double";
-    %9 : double = neg %8;
-    %10 : double = var.load %3;
-    %11 : double = add %9 %10;
-    %12 : double = mul %4 %11;
-    %13 : double = constant @"4.0";
-    %14 : double = mul %12 %13;
-    return %14;
+func @loc="79:5:file:///.../TestForwardAutoDiff.java" @"f"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="79:5" @"x";
+    %3 : Var<java.type:"double"> = var %1 @loc="79:5" @"y";
+    %4 : java.type:"double" = var.load %2 @loc="81:16";
+    %5 : java.type:"double" = var.load %2 @loc="81:31";
+    %6 : java.type:"double" = var.load %3 @loc="81:35";
+    %7 : java.type:"double" = mul %5 %6 @loc="81:31";
+    %8 : java.type:"double" = invoke %7 @loc="81:22" @java.ref:"java.lang.Math::sin(double):double";
+    %9 : java.type:"double" = neg %8 @loc="81:21";
+    %10 : java.type:"double" = var.load %3 @loc="81:40";
+    %11 : java.type:"double" = add %9 %10 @loc="81:21";
+    %12 : java.type:"double" = mul %4 %11 @loc="81:16";
+    %13 : java.type:"double" = constant @loc="81:45" @4.0d;
+    %14 : java.type:"double" = mul %12 %13 @loc="81:16";
+    return %14 @loc="81:9";
 };
 ```
 
@@ -235,15 +237,15 @@ The lambda-like expression represents the fusion of the function declaration
 operation's single body and the body's first and only block, called the entry
 block. Then there is a sequence of operations in the entry block. For each
 operation there is an instance of a corresponding class present in the in-memory
-form, all of which extend from the abstract class `java.lang.reflect.code.Op`.
+form, all of which extend from the abstract class `jdk.incubator.code.Op`.
 
 The entry block has two block parameters, `%0` and `%1` (corresponding to `x`
-and `y`), each described by a type of `double`, which model `f`'s method
-parameters. These parameters are used as operands of various operations. Many
-operations produce operation results, e.g., `%12` the result of a multiplication
-operation, that are used as operands of subsequent operations, and so on.
-The `return` operation has a result, again like all other operations, but since
-that result cannot be meaningfully used we don't present it.
+and `y`), each described by a type of `java.type:"double"`, which model `f`'s
+method parameters. These parameters are used as operands of various operations.
+Many operations produce operation results, e.g., `%12` the result of a
+multiplication operation, that are used as operands of subsequent operations,
+and so on. The `return` operation has a result, again like all other operations,
+but since that result cannot be meaningfully used we don't present it.
 
 Code models have the property of Static Single-Assignment (SSA). We refer to
 variables that can only be assigned once as values (they are a bit like final
@@ -256,8 +258,8 @@ to [MLIR](https://mlir.llvm.org/) and that is by design.)
 
 We can see how the operations model Java language constructs like method
 declarations, variables (method parameters or local variables) and access of
-variables, binary and unary mathematical operations, or method invocations (
-e.g., to method `java.lang.Math::sin`).
+variables, binary and unary mathematical operations, or method invocations
+(e.g., to method `java.lang.Math::sin`).
 
 ### Analyzing the model
 
@@ -271,15 +273,16 @@ fcm = SSA.transform(fcm);
 The textual form of the resulting code model is as follows.
 
 ```text
-func @"f" (%0 : double, %1 : double)double -> {
-    %2 : double = mul %0 %1;
-    %3 : double = invoke %2 @"java.lang.Math::sin(double)double";
-    %4 : double = neg %3;
-    %5 : double = add %4 %1;
-    %6 : double = mul %0 %5;
-    %7 : double = constant @"4.0";
-    %8 : double = mul %6 %7;
-    return %8;
+func @loc="79:5:file:///.../TestForwardAutoDiff.java" @"f" 
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = mul %0 %1 @loc="81:31";
+    %3 : java.type:"double" = invoke %2 @loc="81:22" @java.ref:"java.lang.Math::sin(double):double";
+    %4 : java.type:"double" = neg %3 @loc="81:21";
+    %5 : java.type:"double" = add %4 %1 @loc="81:21";
+    %6 : java.type:"double" = mul %0 %5 @loc="81:16";
+    %7 : java.type:"double" = constant @loc="81:45" @4.0d;
+    %8 : java.type:"double" = mul %6 %7 @loc="81:16";
+    return %8 @loc="81:9";
 };
 ```
 
@@ -292,8 +295,8 @@ model with respect to that variable and compute an *active set* of values, those
 which depend transitively on the independent variable.
 
 For example the block parameter `%0` (representing the independent variable `x`)
-is used as an operand by the operation that produces the operation result `%2` (
-the result of a multiplication), and so on.
+is used as an operand by the operation that produces the operation result `%2`
+(the result of a multiplication), and so on.
 
 The active set for `%0` is `{%0, %2, %3, %4, %5, %6, %8, %9}`. Note the
 value `%9` represents the result of the `return` operation, whose type
@@ -367,8 +370,6 @@ First lets declare a class, `ForwardDifferentiation`, whose constructor computes
 the active set.
 
 ```java
-import static java.lang.reflect.code.op.CoreOps.*;
-
 public final class ForwardDifferentiation {
     // The function to differentiate
     final FuncOp fcm;
@@ -396,11 +397,12 @@ public final class ForwardDifferentiation {
         // A mapping of input values to their (output) differentiated values
         this.diffValueMapping = new HashMap<>();
     }
+    ...
 }
 ```
 
-A map from input operation results to (output) differentiated
-values, `diffValueMapping` is also constructed. This will be used to keep track
+A map from input operation results to (output) differentiated values,
+`diffValueMapping` is also constructed. This will be used to keep track
 of differentiated values that may be used in dependent computations. Because the
 code model is immutable there is no danger that values referred to in the input
 code model will become stale or be modified.
@@ -421,19 +423,12 @@ the method `partialDiff`, which performs the transformation.
 FuncOp partialDiff() {
     int indI = fcm.body().entryBlock().parameters().indexOf(ind);
 
-    // Transform f to f' w.r.t ind
     AtomicBoolean first = new AtomicBoolean(true);
-    FuncOp dfcm = fcm.transform(STR."d\{fcm.funcName()}_darg\{indI}",
+    FuncOp dfcm = fcm.transform(String.format("d%s_darg%d", fcm.funcName(), indI),
             (block, op) -> {
-                // Initialization
                 if (first.getAndSet(false)) {
-                    // Declare the zero value constant
-                    zero = block.op(constant(ind.type(), 0.0d));
-                    // Declare the one value constant
-                    Value one = block.op(constant(ind.type(), 1.0d));
-                    // The differential of ind is one
-                    // For all other parameters it is zero (absence from the map)
-                    diffValueMapping.put(ind, one);
+                    // Initialize
+                    processBlocks(block);
                 }
 
                 // If the result of the operation is in the active set,
@@ -444,13 +439,22 @@ FuncOp partialDiff() {
                     // so that it can be used when differentiating subsequent operations
                     diffValueMapping.put(op.result(), dor);
                 } else {
-                    // Block is not part of the active set, just copy it
                     block.op(op);
                 }
                 return block;
             });
 
     return dfcm;
+}
+
+void processBlocks(Block.Builder block) {
+    // Declare constants at start
+    zero = block.op(constant(ind.type(), 0.0d));
+    // The differential of ind is 1
+    Value one = block.op(constant(ind.type(), 1.0d));
+    diffValueMapping.put(ind, one);
+
+    ...
 }
 ```
 
@@ -460,10 +464,11 @@ expression that accepts an (output) block builder and an input operation. The
 transform method will traverse all operations in the input code model and report
 encountered input operations to the lambda expression.
 
-On first encounter we declare a few constant values in the output model by
-adding constant operations, instances of `ConstantOp`, to the output model.
-Specifically, we declare the zero constant value of `0.0d`, which will be used
-as an operand of subsequent operations we add to output model.
+On first encounter we call `processBlock` that declares a few constant values in
+the output model by adding constant operations, instances of `ConstantOp`, to
+the output model. Specifically, we declare the zero constant value of `0.0d`,
+which will be used as an operand of subsequent operations we add to output
+model.
 
 On each encounter, if the operation's result is a member of the active set then
 we differentiate it, and map the (input) result to its (output) differential
@@ -478,9 +483,8 @@ from that method.
 Value diffOp(Block.Builder block, Op op) {
     // Switch on the op, using pattern matching
     return switch (op) {
-        case ... -> {
-        }
-        case CoreOps.MulOp _ -> {
+        ...
+        case JavaOp.MulOp _ -> {
             // Copy input operation
             block.op(op);
 
@@ -492,12 +496,13 @@ Value diffOp(Block.Builder block, Op op) {
             Value drhs = diffValueMapping.getOrDefault(rhs, zero);
             Value outputLhs = block.context().getValue(lhs);
             Value outputRhs = block.context().getValue(rhs);
-            yield block.op(add(
-                    block.op(mul(dlhs, outputRhs)),
-                    block.op(mul(outputLhs, drhs))));
+            yield block.op(JavaOp.add(
+                    block.op(JavaOp.mul(dlhs, outputRhs)),
+                    block.op(JavaOp.mul(outputLhs, drhs))));
         }
-        case CoreOps.InvokeOp c -> {
-            MethodDesc md = c.invokeDescriptor();
+        ...
+        case JavaOp.InvokeOp c -> {
+            MethodRef md = c.invokeDescriptor();
             String operationName = null;
             if (md.refType().equals(J_L_MATH)) {
                 operationName = md.name();
@@ -512,12 +517,13 @@ Value diffOp(Block.Builder block, Op op) {
                 Value a = op.operands().get(0);
                 Value da = diffValueMapping.getOrDefault(a, zero);
                 Value outputA = block.context().getValue(a);
-                Op.Result cosx = block.op(invoke(J_L_MATH_COS, outputA));
-                yield block.op(mul(cosx, da));
+                Result cosx = block.op(JavaOp.invoke(J_L_MATH_COS, outputA));
+                yield block.op(JavaOp.mul(cosx, da));
             } else {
-                throw new UnsupportedOperationException("Operation not supported: " + op.opName());
+                throw new UnsupportedOperationException("Operation not supported: " + op);
             }
         }
+        ...
     };
 }
 ```
@@ -547,8 +553,8 @@ operation, the result of which is yielded.
 We anticipate patterns and switches will be used for many kinds transformation
 and are designing the code reflection APIs with this in mind. We are looking
 forward to future language capabilities where we can write our own patterns,
-which will enable more sophisticated tree-based matching of operations (
-including on their uses or their operands).
+which will enable more sophisticated tree-based matching of operations
+(including on their uses or their operands).
 
 Let's piece it all together and print out the textual form of the differentiated
 code model.
@@ -557,7 +563,7 @@ code model.
 import ad.ForwardDifferentiation;
 
 Method fm = T.class.getDeclaredMethod("f", double.class, double.class);
-Optional<CoreOps.FuncOp> o = fm.getCodeModel();
+Optional<CoreOps.FuncOp> o = Op.ofMethodfm);
 CoreOps.FuncOp fcm = SSA.transform(o.orElseThrow());
 Block.Parameter x = fcm.body().entryBlock().parameters().get(0);
 // Code model in, code model out
@@ -565,29 +571,30 @@ CoreOps.FuncOp dfcm_x = ForwardDifferentiation.partialDiff(fcm, x);
 ```
 
 ```text
-func @"df_darg0" (%0 : double, %1 : double)double -> {
-    %2 : double = constant @"0.0";
-    %3 : double = constant @"1.0";
-    %4 : double = mul %0 %1;
-    %5 : double = mul %3 %1;
-    %6 : double = mul %0 %2;
-    %7 : double = add %5 %6;
-    %8 : double = invoke %4 @"java.lang.Math::sin(double)double";
-    %9 : double = invoke %4 @"java.lang.Math::cos(double)double";
-    %10 : double = mul %9 %7;
-    %11 : double = neg %8;
-    %12 : double = neg %10;
-    %13 : double = add %11 %1;
-    %14 : double = add %12 %2;
-    %15 : double = mul %0 %13;
-    %16 : double = mul %3 %13;
-    %17 : double = mul %0 %14;
-    %18 : double = add %16 %17;
-    %19 : double = constant @"4.0";
-    %20 : double = mul %15 %19;
-    %21 : double = mul %18 %19;
-    %22 : double = mul %15 %2;
-    %23 : double = add %21 %22;
+func @loc="84:5:file:///.../TestForwardAutoDiff.java" @"df_darg0"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = constant @0.0d;
+    %3 : java.type:"double" = constant @1.0d;
+    %4 : java.type:"double" = mul %0 %1 @loc="86:31";
+    %5 : java.type:"double" = mul %3 %1;
+    %6 : java.type:"double" = mul %0 %2;
+    %7 : java.type:"double" = add %5 %6;
+    %8 : java.type:"double" = invoke %4 @loc="86:22" @java.ref:"java.lang.Math::sin(double):double";
+    %9 : java.type:"double" = invoke %4 @java.ref:"java.lang.Math::cos(double):double";
+    %10 : java.type:"double" = mul %9 %7;
+    %11 : java.type:"double" = neg %8 @loc="86:21";
+    %12 : java.type:"double" = neg %10;
+    %13 : java.type:"double" = add %11 %1 @loc="86:21";
+    %14 : java.type:"double" = add %12 %2;
+    %15 : java.type:"double" = mul %0 %13 @loc="86:16";
+    %16 : java.type:"double" = mul %3 %13;
+    %17 : java.type:"double" = mul %0 %14;
+    %18 : java.type:"double" = add %16 %17;
+    %19 : java.type:"double" = constant @loc="86:45" @4.0d;
+    %20 : java.type:"double" = mul %15 %19 @loc="86:16";
+    %21 : java.type:"double" = mul %18 %19;
+    %22 : java.type:"double" = mul %15 %2;
+    %23 : java.type:"double" = add %21 %22;
     return %23;
 };
 ```
@@ -604,8 +611,8 @@ We can immediately see the differentiated code model has more mathematical
 operations, many are redundant e.g., there are multiplications by 0 or 1, and
 the result of one operation (`%20`) is not used.
 
-We need to transform the code model further to remove redundant operations (
-commonly referred to as expression elimination). The resulting code model with
+We need to transform the code model further to remove redundant operations
+(commonly referred to as expression elimination). The resulting code model with
 eliminated expressions is show below.
 
 (We will not get into the specifics of how expression elimination is
@@ -614,20 +621,21 @@ have shown above, and the curious reader may be interested in looking at the
 code.)
 
 ```text
-func @"df_darg0" (%0 : double, %1 : double)double -> {
-    %2 : double = constant @"0.0";
-    %3 : double = mul %0 %1;
-    %4 : double = add %1 %2;
-    %5 : double = invoke %3 @"java.lang.Math::sin(double)double";
-    %6 : double = invoke %3 @"java.lang.Math::cos(double)double";
-    %7 : double = mul %6 %4;
-    %8 : double = sub %1 %5;
-    %9 : double = sub %2 %7;
-    %10 : double = mul %0 %9;
-    %11 : double = add %8 %10;
-    %12 : double = constant @"4.0";
-    %13 : double = mul %11 %12;
-    %14 : double = add %13 %2;
+func @loc="84:5:file:///.../TestForwardAutoDiff.java" @"df_darg0"
+(%0 : java.type:"double", %1 : java.type:"double")java.type:"double" -> {
+    %2 : java.type:"double" = constant @0.0d;
+    %3 : java.type:"double" = mul %0 %1 @loc="86:31";
+    %4 : java.type:"double" = add %1 %2;
+    %5 : java.type:"double" = invoke %3 @loc="86:22" @java.ref:"java.lang.Math::sin(double):double";
+    %6 : java.type:"double" = invoke %3 @java.ref:"java.lang.Math::cos(double):double";
+    %7 : java.type:"double" = mul %6 %4;
+    %8 : java.type:"double" = sub %1 %5;
+    %9 : java.type:"double" = sub %2 %7;
+    %10 : java.type:"double" = mul %0 %9;
+    %11 : java.type:"double" = add %8 %10;
+    %12 : java.type:"double" = constant @loc="86:45" @4.0d;
+    %13 : java.type:"double" = mul %11 %12;
+    %14 : java.type:"double" = add %13 %2;
     return %14;
 };
 ```
@@ -652,7 +660,7 @@ that contains mathematical expressions embedded in control flow statements.
 
 ```java
 
-@CodeReflection
+@Reflect
 static double f(/* independent */ double x, int y) {
     /* dependent */
     double o = 1.0;
@@ -702,65 +710,66 @@ a [dual number](https://en.wikipedia.org/wiki/Dual_number#Differentiation).)
 statements, retaining the structure of the code.
 
 ```text
-func @"f" (%0 : double, %1 : int)double -> {
-    %2 : Var<double> = var %0 @"x";
-    %3 : Var<int> = var %1 @"y";
-    %4 : double = constant @"1.0";
-    %5 : Var<double> = var %4 @"o";
-    java.for
-        ()Var<int> -> {
-            %6 : int = constant @"0";
-            %7 : Var<int> = var %6 @"i";
-            yield %7;
+func @loc="123:5:file:///.../TestForwardAutoDiff.java" @"fcf"
+(%0 : java.type:"double", %1 : java.type:"int")java.type:"double" -> {
+    %2 : Var<java.type:"double"> = var %0 @loc="123:5" @"x";
+    %3 : Var<java.type:"int"> = var %1 @loc="123:5" @"y";
+    %4 : java.type:"double" = constant @loc="126:20" @1.0d;
+    %5 : Var<java.type:"double"> = var %4 @loc="126:9" @"o";
+    java.for @loc="127:9"
+        ()Var<java.type:"int"> -> {
+            %6 : java.type:"int" = constant @loc="127:22" @0;
+            %7 : Var<java.type:"int"> = var %6 @loc="127:14" @"i";
+            yield %7 @loc="127:9";
         }
-        (%8 : Var<int>)boolean -> {
-            %9 : int = var.load %8;
-            %10 : int = var.load %3;
-            %11 : boolean = lt %9 %10;
-            yield %11;
+        (%8 : Var<java.type:"int">)java.type:"boolean" -> {
+            %9 : java.type:"int" = var.load %8 @loc="127:25";
+            %10 : java.type:"int" = var.load %3 @loc="127:29";
+            %11 : java.type:"boolean" = lt %9 %10 @loc="127:25";
+            yield %11 @loc="127:9";
         }
-        (%12 : Var<int>)void -> {
-            %13 : int = var.load %12;
-            %14 : int = constant @"1";
-            %15 : int = add %13 %14;
-            var.store %12 %15;
-            yield;
+        (%12 : Var<java.type:"int">)java.type:"void" -> {
+            %13 : java.type:"int" = var.load %12 @loc="127:36";
+            %14 : java.type:"int" = constant @loc="127:40" @1;
+            %15 : java.type:"int" = add %13 %14 @loc="127:36";
+            var.store %12 %15 @loc="127:32";
+            yield @loc="127:9";
         }
-        (%16 : Var<int>)void -> {
-            java.if
-                ()boolean -> {
-                    %17 : int = var.load %16;
-                    %18 : int = constant @"1";
-                    %19 : boolean = gt %17 %18;
-                    yield %19;
+        (%16 : Var<java.type:"int">)java.type:"void" -> {
+            java.if @loc="128:13"
+                ()java.type:"boolean" -> {
+                    %17 : java.type:"int" = var.load %16 @loc="128:17";
+                    %18 : java.type:"int" = constant @loc="128:21" @1;
+                    %19 : java.type:"boolean" = gt %17 %18 @loc="128:17";
+                    yield %19 @loc="128:13";
                 }
-                ()void -> {
-                    java.if
-                        ()boolean -> {
-                            %20 : int = var.load %16;
-                            %21 : int = constant @"5";
-                            %22 : boolean = lt %20 %21;
-                            yield %22;
+                ()java.type:"void" -> {
+                    java.if @loc="129:17"
+                        ()java.type:"boolean" -> {
+                            %20 : java.type:"int" = var.load %16 @loc="129:21";
+                            %21 : java.type:"int" = constant @loc="129:25" @5;
+                            %22 : java.type:"boolean" = lt %20 %21 @loc="129:21";
+                            yield %22 @loc="129:17";
                         }
-                        ()void -> {
-                            %23 : double = var.load %5;
-                            %24 : double = var.load %2;
-                            %25 : double = mul %23 %24;
-                            var.store %5 %25;
-                            yield;
+                        ()java.type:"void" -> {
+                            %23 : java.type:"double" = var.load %5 @loc="130:25";
+                            %24 : java.type:"double" = var.load %2 @loc="130:29";
+                            %25 : java.type:"double" = mul %23 %24 @loc="130:25";
+                            var.store %5 %25 @loc="130:21";
+                            yield @loc="129:17";
                         }
-                        ()void -> {
+                        ()java.type:"void" -> {
                             yield;
                         };
-                    yield;
+                    yield @loc="128:13";
                 }
-                ()void -> {
+                ()java.type:"void" -> {
                     yield;
                 };
-            java.continue;
+            java.continue @loc="127:9";
         };
-    %26 : double = var.load %5;
-    return %26;
+    %26 : java.type:"double" = var.load %5 @loc="134:16";
+    return %26 @loc="134:9";
 };
 ```
 
@@ -782,60 +791,51 @@ We can lower `f`'s code model using a lowering transformation and then transform
 to pure SSA.
 
 ```text
-fcm = fcm.transform((block, op) -> {
-    if (op instanceof Op.Lowerable lop) {
-        return lop.lower(block);
-    } else {
-        block.op(op);
-        return block;
-    }
-});
+fcm = fcm.transform(CodeTransformer.LOWERING_TRANSFORMER);
 fcm = SSA.transform(fcm);
 ```
 
 ```text
-func @"fcf" (%0 : double, %1 : int)double -> {
-    %2 : double = constant @"1.0";
-    %3 : int = constant @"0";
-    branch ^block_0(%2, %3);
+func @loc="125:5:file:///.../TestForwardAutoDiff.java" @"fcf"
+(%0 : java.type:"double", %1 : java.type:"int")java.type:"double" -> {
+    %2 : java.type:"double" = constant @loc="128:20" @1.0d;
+    %3 : java.type:"int" = constant @loc="129:22" @0;
+    branch ^block_1(%3, %2);
   
-  ^block_0(%4 : double, %5 : int):
-    %6 : boolean = lt %5 %1;
-    cbranch %6 ^block_1 ^block_2;
-  
-  ^block_1:
-    %7 : int = constant @"1";
-    %8 : boolean = gt %5 %7;
-    cbranch %8 ^block_3 ^block_4;
-  
-  ^block_3:
-    %9 : int = constant @"5";
-    %10 : boolean = lt %5 %9;
-    cbranch %10 ^block_5 ^block_6;
-  
-  ^block_5:
-    %11 : double = mul %4 %0;
-    branch ^block_7(%11);
-  
-  ^block_6:
-    branch ^block_7(%4);
-  
-  ^block_7(%12 : double):
-    branch ^block_8(%12);
-  
-  ^block_4:
-    branch ^block_8(%4);
-  
-  ^block_8(%13 : double):
-    branch ^block_9;
-  
-  ^block_9:
-    %14 : int = constant @"1";
-    %15 : int = add %5 %14;
-    branch ^block_0(%13, %15);
+  ^block_1(%4 : java.type:"int", %5 : java.type:"double"):
+    %6 : java.type:"boolean" = lt %4 %1 @loc="129:25";
+    cbranch %6 ^block_2 ^block_9;
   
   ^block_2:
-    return %4;
+    %7 : java.type:"int" = constant @loc="130:21" @1;
+    %8 : java.type:"boolean" = gt %4 %7 @loc="130:17";
+    cbranch %8 ^block_3 ^block_7;
+  
+  ^block_3:
+    %9 : java.type:"int" = constant @loc="131:25" @5;
+    %10 : java.type:"boolean" = lt %4 %9 @loc="131:21";
+    cbranch %10 ^block_4 ^block_5;
+  
+  ^block_4:
+    %11 : java.type:"double" = mul %5 %0 @loc="132:25";
+    branch ^block_6(%11);
+  
+  ^block_5:
+    branch ^block_6(%5);
+  
+  ^block_6(%12 : java.type:"double"):
+    branch ^block_8(%12);
+  
+  ^block_7:
+    branch ^block_8(%5);
+  
+  ^block_8(%13 : java.type:"double"):
+    %14 : java.type:"int" = constant @loc="129:40" @1;
+    %15 : java.type:"int" = add %4 %14 @loc="129:36";
+    branch ^block_1(%15, %13);
+  
+  ^block_9:
+    return %5 @loc="136:9";
 };
 ```
 
@@ -844,8 +844,8 @@ multiple blocks within the `func` operation's body. There is no longer any
 nesting of bodies.
 
 Control flow of the program is modelled by the blocks and how they are connected
-together to form a *control flow graph*. In `block_9` we can observe a branch
-back to `block_0` which passes values of `o` and `i` as block arguments for the
+together to form a *control flow graph*. In `block_8` we can observe a branch
+back to `block_1` which passes values of `i` and `o` as block arguments for the
 next loop iteration. (Block arguments and parameters are analogous to phi nodes
 in other approaches that model code.)
 
@@ -854,63 +854,61 @@ differentiating operations, to understand these connections between blocks.
 
 With some modest enhancements we can compute the active set for `x` and
 differentiate this Java method. The active set will have block parameters as
-members, such as parameter `%4`, which represents the value `o` for the current
+members, such as parameter `%5`, which represents the value `o` for the current
 loop iteration (since `o` is dependent on `x`). The differentiated model is
 presented below.
 
 ```text
-func @"dfcf_darg0" (%0 : double, %1 : int)double -> {
-    %2 : double = constant @"0.0";
-    %3 : double = constant @"1.0";
-    %4 : double = constant @"1.0";
-    %5 : int = constant @"0";
-    branch ^block_0(%4, %5, %2);
+func @loc="124:5:file:///.../TestForwardAutoDiff.java" @"dfcf_darg0"
+(%0 : java.type:"double", %1 : java.type:"int")java.type:"double" -> {
+    %2 : java.type:"double" = constant @0.0d;
+    %3 : java.type:"double" = constant @1.0d;
+    %4 : java.type:"double" = constant @loc="127:20" @1.0d;
+    %5 : java.type:"int" = constant @loc="128:22" @0;
+    branch ^block_1(%5, %4, %2);
   
-  ^block_0(%6 : double, %7 : int, %8 : double):
-    %9 : boolean = lt %7 %1;
-    cbranch %9 ^block_1 ^block_2;
-  
-  ^block_1:
-    %10 : int = constant @"1";
-    %11 : boolean = gt %7 %10;
-    cbranch %11 ^block_3 ^block_4;
-  
-  ^block_3:
-    %12 : int = constant @"5";
-    %13 : boolean = lt %7 %12;
-    cbranch %13 ^block_5 ^block_6;
-  
-  ^block_5:
-    %14 : double = mul %6 %0;
-    %15 : double = mul %8 %0;
-    %16 : double = mul %6 %3;
-    %17 : double = add %15 %16;
-    branch ^block_7(%14, %17);
-  
-  ^block_6:
-    branch ^block_7(%6, %8);
-  
-  ^block_7(%18 : double, %19 : double):
-    branch ^block_8(%18, %19);
-  
-  ^block_4:
-    branch ^block_8(%6, %8);
-  
-  ^block_8(%20 : double, %21 : double):
-    branch ^block_9;
-  
-  ^block_9:
-    %22 : int = constant @"1";
-    %23 : int = add %7 %22;
-    branch ^block_0(%20, %23, %21);
+  ^block_1(%6 : java.type:"int", %7 : java.type:"double", %8 : java.type:"double"):
+    %9 : java.type:"boolean" = lt %6 %1 @loc="128:25";
+    cbranch %9 ^block_2 ^block_9;
   
   ^block_2:
+    %10 : java.type:"int" = constant @loc="129:21" @1;
+    %11 : java.type:"boolean" = gt %6 %10 @loc="129:17";
+    cbranch %11 ^block_3 ^block_7;
+  
+  ^block_3:
+    %12 : java.type:"int" = constant @loc="130:25" @5;
+    %13 : java.type:"boolean" = lt %6 %12 @loc="130:21";
+    cbranch %13 ^block_4 ^block_5;
+  
+  ^block_4:
+    %14 : java.type:"double" = mul %7 %0 @loc="131:25";
+    %15 : java.type:"double" = mul %8 %0;
+    %16 : java.type:"double" = mul %7 %3;
+    %17 : java.type:"double" = add %15 %16;
+    branch ^block_6(%14, %17);
+  
+  ^block_5:
+    branch ^block_6(%7, %8);
+  
+  ^block_6(%18 : java.type:"double", %19 : java.type:"double"):
+    branch ^block_8(%18, %19);
+  
+  ^block_7:
+    branch ^block_8(%7, %8);
+  
+  ^block_8(%20 : java.type:"double", %21 : java.type:"double"):
+    %22 : java.type:"int" = constant @loc="128:40" @1;
+    %23 : java.type:"int" = add %6 %22 @loc="128:36";
+    branch ^block_1(%23, %20, %21);
+  
+  ^block_9:
     return %8;
 };
 ```
 
-We can observe in `block_5` the application of the product rule. Further we can
+We can observe in `block_4` the application of the product rule. Further we can
 observe additional block arguments and parameters required to pass along the
-differential of `o`, `d_o`. In `block_9` there is a branch with an additional
+differential of `o`, `d_o`. In `block_8` there is a branch with an additional
 block argument appended, value `%21`, that becomes the next value of `d_o`
-in `block_0`, parameter `%8`
+in `block_1`, parameter `%8`
