@@ -1,6 +1,8 @@
 # Emulating C# LINQ in Java using Code Reflection
+
 #### Paul Sandoz {.author}
-#### February 2024 {.date}
+
+#### February 2024, Updated Dec 2025 {.date}
 
 In this article we will explain how to emulate aspects of C#'s Language
 Integrated Query ([LINQ](https://learn.microsoft.com/en-us/dotnet/csharp/linq/))
@@ -95,8 +97,9 @@ record Customer(String contactName, String phone, String city) {
 
 QueryProvider qp = new linq.TestQueryProvider();
 
-// Find all customers based in London, and return their names
-QueryResult<Stream<String>> results = qp.newQuery(Customer.class)
+// Query all customers based in London, and return their names
+@Reflect
+QueryResult<Stream<String>> results = qp.query(Customer.class)
         .where(c -> c.city.equals("London"))
         .select(c -> c.contactName)
         .elements();
@@ -119,7 +122,9 @@ types.
 
 ```java
 Queryable<Customer> allCustomers = qp.query(Customer.class);
+@Reflect
 Queryable<Customer> londonCustomers = allCustomers.where(c -> c.city.equals("London"));
+@Reflect
 Queryable<String> londonCustomerNames = londonCustomers.select(c -> c.contactName);
 QueryResult<Stream<String>> results = londonCustomerNames.elements();
 ```
@@ -141,30 +146,14 @@ names.
 The signatures of the `where` and `select` methods are as follows.
 
 ```java
-default Queryable<T> where(QuotablePredicate<T> f) { /* ... */ }
+default Queryable<T> where(Predicate<T> f) { /* ... */ }
 
-default <R> Queryable<R> select(QuotableFunction<T, R> f) { /* ... */ }
+default <R> Queryable<R> select(Function<T, R> f) { /* ... */ }
 ```
 
-`QuotablePredicate` and `QuotableFunction` are functional interfaces that extend
-from `Predicate` and `Function` and the Code Reflection
-interface `java.lang.reflect.code.Quotable`.
-
-Here is the declaration of `Quotable`.
-
-```java
-
-@FunctionalInterface
-public interface QuotablePredicate<T> extends Quotable, Predicate<T> {
-}
-```
-
-When a lambda expression is targeted to a quotable functional interface a code
-model for the lambda expression will be built by the source compiler and made
-accessible at runtime via the quotable instance. In a similar manner to how we
-can obtain serializable lambda expressions (using `Serializable`) that can be
-serialized, we can obtain *quotable* lambda expressions whose code model can be
-obtained.
+The `@Reflect` annotation declared on the local variable assignment statements
+ensures code models for the lambda expressions, present in the assignment's
+initializer expression, will be built by `javac` and made accessible at runtime.
 
 ### Obtaining a code model
 
@@ -172,26 +161,29 @@ Let's first focus on obtaining the code model of a quotable lambda expression.
 We shall return to how code models for queries are composed and built in later
 sections.
 
-We can obtain the code model of the `QuotablePredicate` instance, checking if a
+We can obtain the code model of the `Predicate` instance, checking if a
 customer is located in the city of London, as follows.
 
+[//]: # (@formatter:off)
 ```java
-QuotablePredicate<Customer> qp = c -> c.city.equals("London");
-Quoted q = qp.quoted();
-Op op = q.op();
-CoreOps.LambdaOp qpcm = (CoreOps.LambdaOp) op;
+@Reflect
+Predicate<Customer> p = c -> c.city.equals("London");
+Optional<Quoted> q = Op.ofQuotable(p);
+Op op = q.orElseThrow().op();
+JavaOp.LambdaOp pcm = (JavaOp.LambdaOp) op;
 ```
+[//]: # (@formatter:on)
 
-We call the `Quotable::quoted` method to obtain an instance of `Quoted` from
-which we obtain the code model with a call to `Quoted::op`. In this case the
-lambda expression does not capture any values, but if it did we could obtain
+We call the `Op::ofQuotable` method to obtain an optional instance of `Quoted`
+from which we obtain the code model with a call to `Quoted::op`. In this case
+the lambda expression does not capture any values, but if it did we could obtain
 those values from the quoted instance.
 
-The code model of `qp` is represented as an instance of `CoreOps.LambdaOp`
+The code model of `p` is represented as an instance of `CoreOps.LambdaOp`
 corresponding to a *lambda expression* operation that models a lambda
 expression. Since quoting is potentially not limited to just the quoting of
 lambda expressions we first obtain the code model as an instance
-of `java.lang.reflect.code.Op`, the top-level type for all operations, from
+of `java.incubator.code.Op`, the top-level type for all operations, from
 which we then down cast.
 
 ### Explaining the code model
@@ -209,26 +201,27 @@ term "operation" in a more conventional sense, such as arithmetic operations.
 However, given the structure described above, there is no need to limit
 ourselves to this conventional sense. We are free to define an operation whose
 operational semantics *declare* a function (instances of `CoreOps.FuncOp`),
-model a Java lambda expression (instances of `CoreOps.LambdaOp`), or model a
-Java `try` statement (instances of `ExtendedOps.JavaTryOp`).
+model a Java lambda expression (instances of `JavaOp.LambdaOp`), or model a
+Java `try` statement (instances of `JavaOp.TryOp`).
 
-What does the code model of `qp` look like? We can serialize its in-memory
-form (the instance of `CoreOps.LambdaOp`) to a textual form.
+What does the code model of `p` look like? We can serialize its in-memory
+form (the instance of `JavaOp.LambdaOp`) to a textual form.
 
 ```java
-System.out.println(qpcm.toText());
+System.out.println(pcm.toText());
 ```
 
 Which prints the following text.
 
 ```text
-lambda (%0 : linq.TestLinq$Customer)boolean -> {
-    %1 : Var<linq.TestLinq$Customer> = var %0 @"c";
-    %2 : linq.TestLinq$Customer = var.load %1;
-    %3 : java.lang.String = field.load %2 @"linq.TestLinq$Customer::city()java.lang.String";
-    %4 : java.lang.String = constant @"London";
-    %5 : boolean = invoke %3 %4 @"java.lang.String::equals(java.lang.Object)boolean";
-    return %5;
+%0 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true
+(%1 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+    %2 : Var<java.type:"linq.TestLinq$Customer"> = var %1 @"c";
+    %3 : java.type:"linq.TestLinq$Customer" = var.load %2;
+    %4 : java.type:"java.lang.String" = field.load %3 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
+    %5 : java.type:"java.lang.String" = constant @"London";
+    %6 : java.type:"boolean" = invoke %4 %5 @java.ref:"java.lang.String::equals(java.lang.Object):boolean";
+    return %6;
 };
 ```
 
@@ -241,19 +234,19 @@ The lambda-like expression represents the fusion of the lambda expression
 operation's single body and the body's first and only block, called the entry
 block. Then there is a sequence of operations in the entry block. For each
 operation there is an instance of a corresponding class present in the in-memory
-form, all of which extend from the abstract class `java.lang.reflect.code.Op`.
+form, all of which extend from the abstract class `java.incubator.code.Op`.
 
-The entry block has one block parameters, `%0` (corresponding to `c`), described
-by a type of `linq.TestLinq$Customer`, which models `qp`'s parameter. This
+The entry block has one block parameters, `%1` (corresponding to `c`), described
+by a type of `linq.TestLinq$Customer`, which models `p`'s parameter. This
 parameter is used as an operand of another operation. Many operations produce
-operation results, e.g., `%3` the result of a field load operation, that are
+operation results, e.g., `%4` the result of a field load operation, that are
 used as operands of subsequent operations, and so on. The `return`
 operation has a result, again like all other operations, but since that result
 cannot be meaningfully used we don't present it.
 
 Code models have the property of Static Single-Assignment (SSA). We refer to
 variables that can only be assigned once as values (they are a bit like final
-variables in Java) .e.g., value `%3` can never be modified. A variable
+variables in Java) .e.g., value `%4` can never be modified. A variable
 declaration is modeled as an operation that produces a value that holds a
 value (a box), and access operations load or store to that box.
 
@@ -266,7 +259,7 @@ variables, field access, or method invocations (e.g., to
 method `String::equals`).
 
 The field load and invoke operations are referred to as reflective operations.
-They declare *descriptors* (an operation attribute prefixed with `@`) that can
+They declare *references* (an operation attribute prefixed with `@`) that can
 be used to construct method handles, or to generate bytecode instructions and
 their constant pool entries.
 
@@ -283,7 +276,7 @@ System.out.println(allCustomers.expression().toText());
 ```
 
 ```text
-func @"query" (%0 : linq.Queryable<linq.TestLinq$Customer>)linq.Queryable<linq.TestLinq$Customer> -> {
+func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.Queryable<linq.TestLinq$Customer>" -> {
     return %0;
 };
 ```
@@ -292,27 +285,28 @@ The initial queryable instance has a code model whose root is a *function
 declaration* operation. A function declaration operation is similarly structured
 as a lambda expression operation we have previously described. This code model
 represents an identity function, returning the parameter `%0`. The parameter's
-type description is `linq.Queryable<linq.TestLinq$Customer>` that encapsulates
-the `Customer` type, so we know what table we are querying.
+type is `linq.Queryable<linq.TestLinq$Customer>` that encapsulates the
+`Customer` type, so we know what table we are querying.
+
+The second queryable is as follows.
 
 ```
+@Reflect
 Queryable<Customer> londonCustomers = allCustomers.where(c -> c.city.equals("London"));
 System.out.println(londonCustomers.expression().toText());
 ```
 
-The second queryable is as follows.
-
 ```text
-func @"query" (%0 : linq.Queryable<linq.TestLinq$Customer>)linq.Queryable<linq.TestLinq$Customer> -> {
-    %1 : linq.QuotablePredicate<linq.TestLinq$Customer> = lambda (%2 : linq.TestLinq$Customer)boolean -> {
-        %3 : Var<linq.TestLinq$Customer> = var %2 @"c";
-        %4 : linq.TestLinq$Customer = var.load %3;
-        %5 : java.lang.String = field.load %4 @"linq.TestLinq$Customer::city()java.lang.String";
-        %6 : java.lang.String = constant @"London";
-        %7 : boolean = invoke %5 %6 @"java.lang.String::equals(java.lang.Object)boolean";
+func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.Queryable<linq.TestLinq$Customer>" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+        %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
+        %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
+        %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
+        %6 : java.type:"java.lang.String" = constant @"London";
+        %7 : java.type:"boolean" = invoke %5 %6 @java.ref:"java.lang.String::equals(java.lang.Object):boolean";
         return %7;
     };
-    %8 : linq.Queryable<linq.TestLinq$Customer> = invoke %0 %1 @"linq.Queryable::where(linq.QuotablePredicate)linq.Queryable";
+    %8 : java.type:"linq.Queryable<linq.TestLinq$Customer>" = invoke %0 %1 @java.ref:"linq.Queryable::where(java.util.function.Predicate):linq.Queryable";
     return %8;
 };
 ```
@@ -324,28 +318,29 @@ returned.
 The third queryable is as follows.
 
 ```
+@Reflect
 Queryable<String> londonCustomerNames = londonCustomers.select(c -> c.contactName);
 System.out.println(londonCustomerNames.expression().toText());
 ```
 
 ```text
-func @"query" (%0 : linq.Queryable<linq.TestLinq$Customer>)linq.Queryable<java.lang.String> -> {
-    %1 : linq.QuotablePredicate<linq.TestLinq$Customer> = lambda (%2 : linq.TestLinq$Customer)boolean -> {
-        %3 : Var<linq.TestLinq$Customer> = var %2 @"c";
-        %4 : linq.TestLinq$Customer = var.load %3;
-        %5 : java.lang.String = field.load %4 @"linq.TestLinq$Customer::city()java.lang.String";
-        %6 : java.lang.String = constant @"London";
-        %7 : boolean = invoke %5 %6 @"java.lang.String::equals(java.lang.Object)boolean";
+func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.Queryable<java.lang.String>" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+        %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
+        %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
+        %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
+        %6 : java.type:"java.lang.String" = constant @"London";
+        %7 : java.type:"boolean" = invoke %5 %6 @java.ref:"java.lang.String::equals(java.lang.Object):boolean";
         return %7;
     };
-    %8 : linq.Queryable<linq.TestLinq$Customer> = invoke %0 %1 @"linq.Queryable::where(linq.QuotablePredicate)linq.Queryable";
-    %9 : linq.QuotableFunction<linq.TestLinq$Customer, java.lang.String> = lambda (%10 : linq.TestLinq$Customer)java.lang.String -> {
-        %11 : Var<linq.TestLinq$Customer> = var %10 @"c";
-        %12 : linq.TestLinq$Customer = var.load %11;
-        %13 : java.lang.String = field.load %12 @"linq.TestLinq$Customer::contactName()java.lang.String";
+    %8 : java.type:"linq.Queryable<linq.TestLinq$Customer>" = invoke %0 %1 @java.ref:"linq.Queryable::where(java.util.function.Predicate):linq.Queryable";
+    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isQuotable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
+        %11 : Var<java.type:"linq.TestLinq$Customer"> = var %10 @"c";
+        %12 : java.type:"linq.TestLinq$Customer" = var.load %11;
+        %13 : java.type:"java.lang.String" = field.load %12 @java.ref:"linq.TestLinq$Customer::contactName:java.lang.String";
         return %13;
     };
-    %14 : linq.Queryable<java.lang.String> = invoke %8 %9 @"linq.Queryable::select(linq.QuotableFunction)linq.Queryable";
+    %14 : java.type:"linq.Queryable<java.lang.String>" = invoke %8 %9 @java.ref:"linq.Queryable::select(java.util.function.Function):linq.Queryable";
     return %14;
 };
 ```
@@ -365,24 +360,24 @@ System.out.println(results.expression().toText());
 ```
 
 ```text
-func @"queryResult" (%0 : linq.Queryable<linq.TestLinq$Customer>)linq.QueryResult<java.util.stream.Stream<java.lang.String>> -> {
-    %1 : linq.QuotablePredicate<linq.TestLinq$Customer> = lambda (%2 : linq.TestLinq$Customer)boolean -> {
-        %3 : Var<linq.TestLinq$Customer> = var %2 @"c";
-        %4 : linq.TestLinq$Customer = var.load %3;
-        %5 : java.lang.String = field.load %4 @"linq.TestLinq$Customer::city()java.lang.String";
-        %6 : java.lang.String = constant @"London";
-        %7 : boolean = invoke %5 %6 @"java.lang.String::equals(java.lang.Object)boolean";
+func @"queryResult" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.QueryResult<java.util.stream.Stream<java.lang.String>>" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+        %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
+        %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
+        %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
+        %6 : java.type:"java.lang.String" = constant @"London";
+        %7 : java.type:"boolean" = invoke %5 %6 @java.ref:"java.lang.String::equals(java.lang.Object):boolean";
         return %7;
     };
-    %8 : linq.Queryable<linq.TestLinq$Customer> = invoke %0 %1 @"linq.Queryable::where(linq.QuotablePredicate)linq.Queryable";
-    %9 : linq.QuotableFunction<linq.TestLinq$Customer, java.lang.String> = lambda (%10 : linq.TestLinq$Customer)java.lang.String -> {
-        %11 : Var<linq.TestLinq$Customer> = var %10 @"c";
-        %12 : linq.TestLinq$Customer = var.load %11;
-        %13 : java.lang.String = field.load %12 @"linq.TestLinq$Customer::contactName()java.lang.String";
+    %8 : java.type:"linq.Queryable<linq.TestLinq$Customer>" = invoke %0 %1 @java.ref:"linq.Queryable::where(java.util.function.Predicate):linq.Queryable";
+    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isQuotable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
+        %11 : Var<java.type:"linq.TestLinq$Customer"> = var %10 @"c";
+        %12 : java.type:"linq.TestLinq$Customer" = var.load %11;
+        %13 : java.type:"java.lang.String" = field.load %12 @java.ref:"linq.TestLinq$Customer::contactName:java.lang.String";
         return %13;
     };
-    %14 : linq.Queryable<java.lang.String> = invoke %8 %9 @"linq.Queryable::select(linq.QuotableFunction)linq.Queryable";
-    %15 : linq.QueryResult<java.util.stream.Stream<java.lang.String>> = invoke %14 @"linq.Queryable::elements()linq.QueryResult";
+    %14 : java.type:"linq.Queryable<java.lang.String>" = invoke %8 %9 @java.ref:"linq.Queryable::select(java.util.function.Function):linq.Queryable";
+    %15 : java.type:"linq.QueryResult<java.util.stream.Stream<java.lang.String>>" = invoke %14 @java.ref:"linq.Queryable::elements():linq.QueryResult";
     return %15;
 };
 ```
@@ -395,7 +390,7 @@ code model of the following method.
 
 ```java
 
-@CodeReflection
+@Reflect
 static QueryResult<Stream<String>> queryResult(Queryable<Customer> q) {
     return q.where(c -> c.city.equals("London"))
             .select(c -> c.contactName)
@@ -435,8 +430,8 @@ Here is the implementation of the `where` method.
 
 ```text
 @SuppressWarnings("unchecked")
-default Queryable<T> where(QuotablePredicate<T> f) {
-    CoreOps.LambdaOp l = (CoreOps.LambdaOp) f.quoted().op();
+default Queryable<T> where(Predicate<T> f) {
+    JavaOp.LambdaOp l = (JavaOp.LambdaOp) Op.ofQuotable(f).get().op();
     return (Queryable<T>) insertQuery(elementType(), "where", l);
 }
 ```
@@ -448,32 +443,31 @@ method `insertQuery`, whose result is returned.
 The method `insertQuery` performs the transformation.
 
 ```java
-private Queryable<?> insertQuery(JavaType elementType, String methodName, LambdaOp lambdaOp) {
+private Queryable<?> insertQuery(JavaType elementType, String methodName, JavaOp.LambdaOp lambdaOp) {
     // Copy function expression, replacing return operation
     FuncOp queryExpression = expression();
-    JavaType queryableType = type(Queryable.TYPE, elementType);
+    JavaType queryableType = parameterized(Queryable.TYPE, elementType);
     FuncOp nextQueryExpression = func("query",
-            methodType(queryableType, queryExpression.funcDescriptor().parameters()))
-            .body(b -> b.inline(queryExpression, b.parameters(), (block, query) -> {
-                Op.Result fi = block.op(lambdaOp);
+            functionType(queryableType, queryExpression.invokableType().parameterTypes()))
+            .body(b -> Inliner.inline(b, queryExpression, b.parameters(), (block, query) -> {
+                Result fi = block.op(lambdaOp);
 
-                MethodDesc md = method(Queryable.TYPE, methodName,
-                        methodType(Queryable.TYPE, ((JavaType) lambdaOp.functionalInterface()).rawType()));
-                Op.Result queryable = block.op(invoke(queryableType, md, query, fi));
+                MethodRef md = method(Queryable.TYPE, methodName,
+                        functionType(Queryable.TYPE, ((ClassType) lambdaOp.functionalInterface()).rawType()));
+                Result queryable = block.op(JavaOp.invoke(queryableType, md, query, fi));
 
-                block.op(_return(queryable));
+                block.op(return_(queryable));
             }));
 
     return provider().createQuery(elementType, nextQueryExpression);
 }
 ```
 
-We start by building a new function declaration operation with the static
-factory method `CoreOps.func`. A method description is constructed that
-describes the function's parameters and return type. Then we call the `body`
-method to build the function declaration operation's body. The implementation
-of `body` calls the lambda expression with function body's *entry block
-builder*, from which we can add operations.
+We start by building a new function operation with the static factory method
+`CoreOps.func`. A method reference is constructed that describes the function's
+parameters and return type. Then we call the `body` method to build the function
+operation's body. The implementation of `body` calls the lambda expression with
+function body's *entry block builder*, from which we can add operations.
 
 In this case we are going to *inline* the prior input code model (a previously
 generated function declaration operation) into the output code model we are
@@ -487,9 +481,9 @@ operation, an invocation to the queryable method, and a return the invocation's
 result. We can freely copy the lambda expression operation as long as it does
 not capture.
 
-Because we are inlining we also need to map the input function's parameters to
-the output functions parameters (specifically in both cases the block parameters
-of the entry block of the body of the function declaration operation), so we
-also pass the latter to the `inline` method which takes care of the mapping.
+Because we are inlining we also need to map the queryExpression function's
+parameters to the output functions parameters (specifically in both cases the
+block parameters of the entry block of the body of the function operation), so
+we also pass the latter to the `inline` method which takes care of the mapping.
 
 Finally, we create a new instance of `Queryable` with the output code model.
