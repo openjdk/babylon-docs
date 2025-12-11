@@ -2,7 +2,7 @@
 
 #### Paul Sandoz {.author}
 
-#### February 2024 {.date}
+#### February 2024 {.date}, Updated Dec 2025 {.date}
 
 In this article we will explain how we can use Code Reflection to implement the
 [Triton][Triton-intro] programming model in Java as an alternative to Python.
@@ -266,9 +266,9 @@ The textual-form of the Triton MLIR program is as follows:
 ```mlir
 module {
   tt.func public @add_kernel_0123(%arg0: !tt.ptr<f32, 1> ,
-                                  %arg1: !tt.ptr<f32, 1> , 
-                                  %arg2: !tt.ptr<f32, 1> , 
-                                  %arg3: i32 ) 
+                                  %arg1: !tt.ptr<f32, 1> ,
+                                  %arg2: !tt.ptr<f32, 1> ,
+                                  %arg3: i32 )
                                   attributes {noinline = false} {
     %0 = tt.get_program_id x : i32
     %c64_i32 = arith.constant 64 : i32
@@ -333,11 +333,11 @@ Triton compiler that has the following stages.
       |
       |  Code reflection
       V
-    Java code model  
+    Java code model
       |
       |  Code model transformer
       V
-    Triton code model    
+    Triton code model
 ```
 
 Using Code Reflection we can obtain a _symbolic representation_ of the Java
@@ -375,7 +375,7 @@ Triton vector addition program, and it's Java code model.
 
 [//]: # (@formatter:off)
 ```java
-@CodeReflection
+@Reflect
 static void add_kernel2(Ptr x_ptr,  // *Pointer* to first input vector.
                         Ptr y_ptr,  // *Pointer* to second input vector.
                         Ptr output_ptr,  // *Pointer* to output vector.
@@ -406,8 +406,8 @@ static void add_kernel2(Ptr x_ptr,  // *Pointer* to first input vector.
 ```
 [//]: # (@formatter:on)
 
-The Java method, `add_kernel2`, is annotated with `@CodeReflection`. This
-ensures there is a Java code model available and accessible under similar access
+The Java method, `add_kernel2`, is annotated with `@Reflect`. This ensures there
+is a Java code model available and accessible under similar access
 control rules as for its invocation.
 
 The `Triton` [class][Triton-class] has static methods, such as `arange`, that
@@ -452,75 +452,62 @@ What does the code model of `add_kernel2` look like? We can obtain the code
 model at runtime and serialize its in-memory form to a textual form.
 
 ```
-func @"add_kernel2" (%0 : oracle.code.triton.Ptr,
-                     %1 : oracle.code.triton.Ptr, 
-                     %2 : oracle.code.triton.Ptr, 
-                     %3 : int, 
-                     %4 : int)void -> {
-    %5 : Var<oracle.code.triton.Ptr> = var %0 @"x_ptr";
-    %6 : Var<oracle.code.triton.Ptr> = var %1 @"y_ptr";
-    %7 : Var<oracle.code.triton.Ptr> = var %2 @"output_ptr";
-    %8 : Var<int> = var %3 @"n_elements";
-    %9 : Var<int> = var %4 @"BLOCK_SIZE";
-    %10 : int = constant @"0";
-    %11 : int = invoke %10 
-            @"oracle.code.triton.Triton::programId(int)int";
-    %12 : Var<int> = var %11 @"pid";
-    %13 : int = var.load %12;
-    %14 : int = var.load %9;
-    %15 : int = mul %13 %14;
-    %16 : Var<int> = var %15 @"block_start";
-    %17 : int = constant @"0";
-    %18 : int = var.load %9;
-    %19 : oracle.code.triton.Tensor = invoke %17 %18
-            @"oracle.code.triton.Triton::arange(int, int)oracle.code.triton.Tensor";
-    %20 : Var<oracle.code.triton.Tensor> = var %19 @"range";
-    %21 : int = var.load %16;
-    %22 : java.lang.Integer = invoke %21
-            @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %23 : oracle.code.triton.Tensor = var.load %20;
-    %24 : oracle.code.triton.Tensor = invoke %22 %23
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    %25 : Var<oracle.code.triton.Tensor> = var %24 @"offsets";
-    %26 : oracle.code.triton.Tensor = var.load %25;
-    %27 : int = var.load %8;
-    %28 : java.lang.Integer = invoke %27
-            @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %29 : oracle.code.triton.Triton$CompareKind = field.load
-            @"oracle.code.triton.Triton$CompareKind::LessThan()oracle.code.triton.Triton$CompareKind";
-    %30 : oracle.code.triton.Tensor = invoke %26 %28 %29
-            @"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind)oracle.code.triton.Tensor";
-    %31 : Var<oracle.code.triton.Tensor> = var %30 @"mask";
-    %32 : oracle.code.triton.Ptr = var.load %5;
-    %33 : oracle.code.triton.Tensor = var.load %25;
-    %34 : oracle.code.triton.Tensor = invoke %32 %33
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    %35 : oracle.code.triton.Tensor = var.load %31;
-    %36 : oracle.code.triton.Tensor = invoke %34 %35
-            @"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor)oracle.code.triton.Tensor";
-    %37 : Var<oracle.code.triton.Tensor> = var %36 @"x";
-    %38 : oracle.code.triton.Ptr = var.load %6;
-    %39 : oracle.code.triton.Tensor = var.load %25;
-    %40 : oracle.code.triton.Tensor = invoke %38 %39
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    %41 : oracle.code.triton.Tensor = var.load %31;
-    %42 : oracle.code.triton.Tensor = invoke %40 %41
-            @"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor)oracle.code.triton.Tensor";
-    %43 : Var<oracle.code.triton.Tensor> = var %42 @"y";
-    %44 : oracle.code.triton.Tensor = var.load %37;
-    %45 : oracle.code.triton.Tensor = var.load %43;
-    %46 : oracle.code.triton.Tensor = invoke %44 %45
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    %47 : Var<oracle.code.triton.Tensor> = var %46 @"output";
-    %48 : oracle.code.triton.Ptr = var.load %7;
-    %49 : oracle.code.triton.Tensor = var.load %25;
-    %50 : oracle.code.triton.Tensor = invoke %48 %49
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    %51 : oracle.code.triton.Tensor = var.load %47;
-    %52 : oracle.code.triton.Tensor = var.load %31;
-    invoke %50 %51 %52
-            @"oracle.code.triton.Triton::store(oracle.code.triton.Tensor, oracle.code.triton.Tensor, oracle.code.triton.Tensor)void";
-    return;
+func @loc="107:5:file:/.../TestAddKernel.java" @"add_kernel2"
+(%0 : java.type:"oracle.code.triton.Ptr",
+%1 : java.type:"oracle.code.triton.Ptr",
+%2 : java.type:"oracle.code.triton.Ptr",
+%3 : java.type:"int",
+%4 : java.type:"int")java.type:"void" -> {
+    %5 : Var<java.type:"oracle.code.triton.Ptr"> = var %0 @loc="107:5" @"x_ptr";
+    %6 : Var<java.type:"oracle.code.triton.Ptr"> = var %1 @loc="107:5" @"y_ptr";
+    %7 : Var<java.type:"oracle.code.triton.Ptr"> = var %2 @loc="107:5" @"output_ptr";
+    %8 : Var<java.type:"int"> = var %3 @loc="107:5" @"n_elements";
+    %9 : Var<java.type:"int"> = var %4 @loc="107:5" @"BLOCK_SIZE";
+    %10 : java.type:"int" = constant @loc="143:36" @0;
+    %11 : java.type:"int" = invoke %10 @loc="143:19" @java.ref:"oracle.code.triton.Triton::programId(int):int";
+    %12 : Var<java.type:"int"> = var %11 @loc="143:9" @"pid";
+    %13 : java.type:"int" = var.load %12 @loc="148:27";
+    %14 : java.type:"int" = var.load %9 @loc="148:33";
+    %15 : java.type:"int" = mul %13 %14 @loc="148:27";
+    %16 : Var<java.type:"int"> = var %15 @loc="148:9" @"block_start";
+    %17 : java.type:"int" = constant @loc="149:35" @0;
+    %18 : java.type:"int" = var.load %9 @loc="149:38";
+    %19 : java.type:"oracle.code.triton.Tensor" = invoke %17 %18 @loc="149:21" @java.ref:"oracle.code.triton.Triton::arange(int, int):oracle.code.triton.Tensor";
+    %20 : Var<java.type:"oracle.code.triton.Tensor"> = var %19 @loc="149:9" @"range";
+    %21 : java.type:"int" = var.load %16 @loc="150:34";
+    %22 : java.type:"java.lang.Integer" = invoke %21 @loc="150:23" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+    %23 : java.type:"oracle.code.triton.Tensor" = var.load %20 @loc="150:47";
+    %24 : java.type:"oracle.code.triton.Tensor" = invoke %22 %23 @loc="150:23" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+    %25 : Var<java.type:"oracle.code.triton.Tensor"> = var %24 @loc="150:9" @"offsets";
+    %26 : java.type:"oracle.code.triton.Tensor" = var.load %25 @loc="152:35";
+    %27 : java.type:"int" = var.load %8 @loc="152:44";
+    %28 : java.type:"java.lang.Integer" = invoke %27 @loc="152:20" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+    %29 : java.type:"oracle.code.triton.Triton$CompareKind" = field.load @loc="152:56" @java.ref:"oracle.code.triton.Triton$CompareKind::LessThan:oracle.code.triton.Triton$CompareKind";
+    %30 : java.type:"oracle.code.triton.Tensor" = invoke %26 %28 %29 @loc="152:20" @java.ref:"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind):oracle.code.triton.Tensor";
+    %31 : Var<java.type:"oracle.code.triton.Tensor"> = var %30 @loc="152:9" @"mask";
+    %32 : java.type:"oracle.code.triton.Ptr" = var.load %5 @loc="155:40";
+    %33 : java.type:"oracle.code.triton.Tensor" = var.load %25 @loc="155:47";
+    %34 : java.type:"oracle.code.triton.Tensor" = invoke %32 %33 @loc="155:29" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+    %35 : java.type:"oracle.code.triton.Tensor" = var.load %31 @loc="155:57";
+    %36 : java.type:"oracle.code.triton.Tensor" = invoke %34 %35 @loc="155:17" @java.ref:"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor):oracle.code.triton.Tensor";
+    %37 : Var<java.type:"oracle.code.triton.Tensor"> = var %36 @loc="155:9" @"x";
+    %38 : java.type:"oracle.code.triton.Ptr" = var.load %6 @loc="156:40";
+    %39 : java.type:"oracle.code.triton.Tensor" = var.load %25 @loc="156:47";
+    %40 : java.type:"oracle.code.triton.Tensor" = invoke %38 %39 @loc="156:29" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+    %41 : java.type:"oracle.code.triton.Tensor" = var.load %31 @loc="156:57";
+    %42 : java.type:"oracle.code.triton.Tensor" = invoke %40 %41 @loc="156:17" @java.ref:"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor):oracle.code.triton.Tensor";
+    %43 : Var<java.type:"oracle.code.triton.Tensor"> = var %42 @loc="156:9" @"y";
+    %44 : java.type:"oracle.code.triton.Tensor" = var.load %37 @loc="157:33";
+    %45 : java.type:"oracle.code.triton.Tensor" = var.load %43 @loc="157:36";
+    %46 : java.type:"oracle.code.triton.Tensor" = invoke %44 %45 @loc="157:22" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+    %47 : Var<java.type:"oracle.code.triton.Tensor"> = var %46 @loc="157:9" @"output";
+    %48 : java.type:"oracle.code.triton.Ptr" = var.load %7 @loc="159:33";
+    %49 : java.type:"oracle.code.triton.Tensor" = var.load %25 @loc="159:45";
+    %50 : java.type:"oracle.code.triton.Tensor" = invoke %48 %49 @loc="159:22" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+    %51 : java.type:"oracle.code.triton.Tensor" = var.load %47 @loc="159:55";
+    %52 : java.type:"oracle.code.triton.Tensor" = var.load %31 @loc="159:63";
+    invoke %50 %51 %52 @loc="159:9" @java.ref:"oracle.code.triton.Triton::store(oracle.code.triton.Tensor, oracle.code.triton.Tensor, oracle.code.triton.Tensor):void";
+    return @loc="107:5";
 };
 ```
 
@@ -533,7 +520,7 @@ The lambda-like expression represents the fusion of the function declaration
 operation's single body and the body's first and only block, called the entry
 block. Then there is a sequence of operations in the entry block. For each
 operation there is an instance of a corresponding class present in the in-memory
-form, all of which extend from the abstract class `java.lang.reflect.code.Op`.
+form, all of which extend from the abstract class `java.incubator.code.Op`.
 
 The entry block has four block parameters which model `add_kernel2`'s method
 parameters. These parameters are used as operands of various operations. Many
@@ -674,27 +661,26 @@ Below is a snippet of the Java code model presented above with comments showing
 the mapping of values to attributed types.
 
 ```
-    %16 : Var<int> = var %15 @"block_start";
- // %16 : Var<int> -> int    
-    %17 : int = constant @"0";
- // %17 : int -> constant<int, c0>
-    %18 : int = var.load %9;
- // %18 : int -> constant<int, c64>    
-    %19 : oracle.code.triton.Tensor = invoke %17 %18
-            @"oracle.code.triton.Triton::arange(int, int)oracle.code.triton.Tensor";
- // %19 : oracle.code.triton.Tensor -> tensor<x64, int>
-    %20 : Var<oracle.code.triton.Tensor> = var %19 @"range";
- // %20 : Var<oracle.code.triton.Tensor> -> tensor<x64, int>
-    %21 : int = var.load %16;
+    %16 : Var<java.type:"int"> = var %15 @loc="148:9" @"block_start";
+ // %16 : Var<java.type.primitive<int>> -> int
+    %17 : java.type:"int" = constant @loc="149:35" @0;
+ // %17 : int -> constant<java.type.primitive<int>, c0>
+    %18 : java.type:"int" = var.load %9 @loc="149:38";
+ // %18 : int -> constant<java.type.primitive<int>, c64>
+    %19 : java.type:"oracle.code.triton.Tensor" = invoke %17 %18 @loc="149:21"
+            @java.ref:"oracle.code.triton.Triton::arange(int, int):oracle.code.triton.Tensor";
+ // %19 : oracle.code.triton.Tensor -> tensor<x64, java.type.primitive<int>>
+    %20 : Var<java.type:"oracle.code.triton.Tensor"> = var %19 @loc="149:9" @"range";
+ // %20 : Var<java.type.class<oracle.code.triton.Tensor, java.type.primitive<void>>> -> tensor<x64, java.type.primitive<int>>
+    %21 : java.type:"int" = var.load %16 @loc="150:34";
  // %21 : int -> int
-    %22 : java.lang.Integer = invoke %21
-            @"java.lang.Integer::valueOf(int)java.lang.Integer";
+    %22 : java.type:"java.lang.Integer" = invoke %21 @loc="150:23" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
  // %22 : java.lang.Integer -> int
-    %23 : oracle.code.triton.Tensor = var.load %20;
- // %23 : oracle.code.triton.Tensor -> tensor<x64, int>
-    %24 : oracle.code.triton.Tensor = invoke %22 %23
-            @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
- // %24 : oracle.code.triton.Tensor -> tensor<x64, int>
+    %23 : java.type:"oracle.code.triton.Tensor" = var.load %20 @loc="150:47";
+ // %23 : oracle.code.triton.Tensor -> tensor<x64, java.type.primitive<int>>
+    %24 : java.type:"oracle.code.triton.Tensor" = invoke %22 %23 @loc="150:23"
+            @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+ // %24 : oracle.code.triton.Tensor -> tensor<x64, java.type.primitive<int>>
 ```
 
 ### Transforming the Java code model
@@ -786,30 +772,29 @@ Here is the textual form of the Triton code model produced by compiling the
 `add_kernel2`.
 
 ```
-module ()void -> {
-    tt.func @"add_kernel2_ptr<float>_ptr<float>_ptr<float>_int_64_void" (
-            %0 : ptr<float>, 
-            %1 : ptr<float>, 
-            %2 : ptr<float>, 
-            %3 : int)void 
-            -> {
-        %4 : int = arith.constant @"64";
-        %5 : int = tt.get_program_id @"0";
-        %6 : int = arith.muli %5 %4;
-        %7 : tensor<x64, int> = tt.make_range @start="0" @end="64";
-        %8 : tensor<x64, int> = tt.splat %6;
-        %9 : tensor<x64, int> = arith.addi %8 %7;
-        %10 : tensor<x64, int> = tt.splat %3;
-        %11 : tensor<x64, int> = arith.cmpi %9 %10 @"slt";
-        %12 : tensor<x64, ptr<float>> = tt.splat %0;
-        %13 : tensor<x64, ptr<float>> = tt.addptr %12 %9;
-        %14 : tensor<x64, float> = tt.load %13 %11;
-        %15 : tensor<x64, ptr<float>> = tt.splat %1;
-        %16 : tensor<x64, ptr<float>> = tt.addptr %15 %9;
-        %17 : tensor<x64, float> = tt.load %16 %11;
-        %18 : tensor<x64, float> = arith.addf %14 %17;
-        %19 : tensor<x64, ptr<float>> = tt.splat %2;
-        %20 : tensor<x64, ptr<float>> = tt.addptr %19 %9;
+module ()java.type:"void" -> {
+    tt.func @"add_kernel2_ptr<java.type.primitive<float>>_ptr<java.type.primitive<float>>_ptr<java.type.primitive<float>>_int_64_void" (
+            %0 : ptr<java.type:"float">,
+            %1 : ptr<java.type:"float">,
+            %2 : ptr<java.type:"float">,
+            %3 : java.type:"int")java.type:"void" -> {
+        %4 : java.type:"int" = arith.constant @64;
+        %5 : java.type:"int" = tt.get_program_id @0;
+        %6 : java.type:"int" = arith.muli %5 %4;
+        %7 : tensor<x64, java.type:"int"> = tt.make_range @start=0 @end=64;
+        %8 : tensor<x64, java.type:"int"> = tt.splat %6;
+        %9 : tensor<x64, java.type:"int"> = arith.addi %8 %7;
+        %10 : tensor<x64, java.type:"int"> = tt.splat %3;
+        %11 : tensor<x64, java.type:"boolean"> = arith.cmpi %9 %10 @"slt";
+        %12 : tensor<x64, ptr<java.type:"float">> = tt.splat %0;
+        %13 : tensor<x64, ptr<java.type:"float">> = tt.addptr %12 %9;
+        %14 : tensor<x64, java.type:"float"> = tt.load %13 %11;
+        %15 : tensor<x64, ptr<java.type:"float">> = tt.splat %1;
+        %16 : tensor<x64, ptr<java.type:"float">> = tt.addptr %15 %9;
+        %17 : tensor<x64, java.type:"float"> = tt.load %16 %11;
+        %18 : tensor<x64, java.type:"float"> = arith.addf %14 %17;
+        %19 : tensor<x64, ptr<java.type:"float">> = tt.splat %2;
+        %20 : tensor<x64, ptr<java.type:"float">> = tt.addptr %19 %9;
         tt.store %20 %18 %11;
         tt.return;
     };
@@ -939,30 +924,30 @@ abridged snippet of the Java code model showing the modelled `for` loop (the
 complete snippet is presented below in a subsequent section).
 
 ```
-java.for
-    ()Var<int> -> {
-        %148 : int = constant @"0";
-        %149 : Var<int> = var %148 @"k";
-        yield %149;
+java.for @loc="240:9"
+    ()Var<java.type:"int"> -> {
+        %148 : java.type:"int" = constant @loc="240:22" @0;
+        %149 : Var<java.type:"int"> = var %148 @loc="240:14" @"k";
+        yield %149 @loc="240:9";
     }
-    (%150 : Var<int>)boolean -> {
-        %151 : int = var.load %150;
-        %152 : int = var.load %22;
-        %153 : java.lang.Integer = invoke %152 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-        %154 : int = var.load %31;
-        %155 : java.lang.Integer = invoke %154 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-        %156 : int = invoke %153 %155 @"oracle.code.triton.Triton::cdiv(java.lang.Number, java.lang.Number)int";
-        %157 : boolean = lt %151 %156;
-        yield %157;
+    (%150 : Var<java.type:"int">)java.type:"boolean" -> {
+        %151 : java.type:"int" = var.load %150 @loc="240:25";
+        %152 : java.type:"int" = var.load %22 @loc="240:34";
+        %153 : java.type:"java.lang.Integer" = invoke %152 @loc="240:29" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %154 : java.type:"int" = var.load %31 @loc="240:37";
+        %155 : java.type:"java.lang.Integer" = invoke %154 @loc="240:29" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %156 : java.type:"int" = invoke %153 %155 @loc="240:29" @java.ref:"oracle.code.triton.Triton::cdiv(java.lang.Number, java.lang.Number):int";
+        %157 : java.type:"boolean" = lt %151 %156 @loc="240:25";
+        yield %157 @loc="240:9";
     }
-    (%158 : Var<int>)void -> {
-        %159 : int = var.load %158;
-        %160 : int = constant @"1";
-        %161 : int = add %159 %160;
-        var.store %158 %161;
-        yield;
+    (%158 : Var<java.type:"int">)java.type:"void" -> {
+        %159 : java.type:"int" = var.load %158 @loc="240:52";
+        %160 : java.type:"int" = constant @loc="240:52" @1;
+        %161 : java.type:"int" = add %159 %160 @loc="240:52";
+        var.store %158 %161 @loc="240:52";
+        yield @loc="240:9";
     }
-    (%162 : Var<int>)void -> {
+    (%162 : Var<java.type:"int">)java.type:"void" -> {
         ...
     };
 ```
@@ -988,27 +973,26 @@ reflection analysis package.)
 The resulting transformed snippet is shown below.
 
 ```
-%76 : int = arith.constant @"0";
-%77 : int = tt.call %17 @"cdiv_int_32_int";
-%78 : int = arith.constant @"1";
-%79 : Tuple<tensor<x32, x64, float>, 
-            tensor<x32, x32, ptr<oracle.code.triton.Float16>>, 
-            tensor<x32, x64, ptr<oracle.code.triton.Float16>>> = 
-      scf.for %76 %77 %78 %75 %63 %74 
-      (%80 : int, 
-       %81 : tensor<x32, x64, float>, 
-       %82 : tensor<x32, x32, ptr<oracle.code.triton.Float16>>, 
-       %83 : tensor<x32, x64, ptr<oracle.code.triton.Float16>>)
-           Tuple<tensor<x32, x64, float>, 
-                 tensor<x32, x32, ptr<oracle.code.triton.Float16>>, 
-                 tensor<x32, x64, ptr<oracle.code.triton.Float16>>> 
-      -> {
+%76 : java.type:"int" = arith.constant @value=0;
+%77 : java.type:"int" = tt.call %17 @callee="cdiv_int_32_int";
+%78 : java.type:"int" = arith.constant @value=1;
+%79 : Tuple<tensor<x32, x64, java.type:"float">,
+            tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>,
+            tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>> =
+       scf.for %76 %77 %78 %75 %63 %74
+       (%80 : java.type:"int",
+        %81 : tensor<x32, x64, java.type:"float">,
+        %82 : tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>,
+        %83 : tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>)
+              Tuple<tensor<x32, x64, java.type:"float">,
+                    tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>,
+                    tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>> -> {
     ...
-    scf.yield %99 %102 %105;
+    scf.yield %102 %105 %108;
 };
-%106 : tensor<x32, x64, float> = tuple.load %79 @"0";
-%107 : tensor<x32, x32, ptr<oracle.code.triton.Float16>> = tuple.load %79 @"1";
-%108 : tensor<x32, x64, ptr<oracle.code.triton.Float16>> = tuple.load %79 @"2";
+%109 : tensor<x32, x64, java.type:"float"> = tuple.load %79 @0;
+%110 : tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">> = tuple.load %79 @1;
+%111 : tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">> = tuple.load %79 @2;
 ```
 
 We can see that the values `%76`, `%77` and `%78` correspond to the bounds and
@@ -1033,80 +1017,82 @@ subsequent sections (see the Java [test][matrix-multiply-java] for all details).
 ### Java code model snippet of Java Triton matrix multiply loop
 
 ```
-java.for
-()Var<int> -> {
-    %148 : int = constant @"0";
-    %149 : Var<int> = var %148 @"k";
-    yield %149;
-}
-(%150 : Var<int>)boolean -> {
-    %151 : int = var.load %150;
-    %152 : int = var.load %22;
-    %153 : java.lang.Integer = invoke %152 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %154 : int = var.load %31;
-    %155 : java.lang.Integer = invoke %154 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %156 : int = invoke %153 %155 @"oracle.code.triton.Triton::cdiv(java.lang.Number, java.lang.Number)int";
-    %157 : boolean = lt %151 %156;
-    yield %157;
-}
-(%158 : Var<int>)void -> {
-    %159 : int = var.load %158;
-    %160 : int = constant @"1";
-    %161 : int = add %159 %160;
-    var.store %158 %161;
-    yield;
-}
-(%162 : Var<int>)void -> {
-    %163 : oracle.code.triton.Tensor = var.load %126;
-    %164 : oracle.code.triton.Tensor = var.load %110;
-    %165 : int = constant @"0";
-    %166 : oracle.code.triton.Tensor = invoke %164 %165 @"oracle.code.triton.Triton::expand(oracle.code.triton.Tensor, int)oracle.code.triton.Tensor";
-    %167 : int = var.load %22;
-    %168 : int = var.load %162;
-    %169 : int = var.load %31;
-    %170 : int = mul %168 %169;
-    %171 : int = sub %167 %170;
-    %172 : java.lang.Integer = invoke %171 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %173 : oracle.code.triton.Triton$CompareKind = field.load @"oracle.code.triton.Triton$CompareKind::LessThan()oracle.code.triton.Triton$CompareKind";
-    %174 : oracle.code.triton.Tensor = invoke %166 %172 %173 @"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind)oracle.code.triton.Tensor";
-    %175 : oracle.code.triton.Tensor = invoke %163 %174 @"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor)oracle.code.triton.Tensor";
-    %176 : Var<oracle.code.triton.Tensor> = var %175 @"a";
-    %177 : oracle.code.triton.Tensor = var.load %142;
-    %178 : oracle.code.triton.Tensor = var.load %110;
-    %179 : int = constant @"1";
-    %180 : oracle.code.triton.Tensor = invoke %178 %179 @"oracle.code.triton.Triton::expand(oracle.code.triton.Tensor, int)oracle.code.triton.Tensor";
-    %181 : int = var.load %22;
-    %182 : int = var.load %162;
-    %183 : int = var.load %31;
-    %184 : int = mul %182 %183;
-    %185 : int = sub %181 %184;
-    %186 : java.lang.Integer = invoke %185 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %187 : oracle.code.triton.Triton$CompareKind = field.load @"oracle.code.triton.Triton$CompareKind::LessThan()oracle.code.triton.Triton$CompareKind";
-    %188 : oracle.code.triton.Tensor = invoke %180 %186 %187 @"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind)oracle.code.triton.Tensor";
-    %189 : oracle.code.triton.Tensor = invoke %177 %188 @"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor)oracle.code.triton.Tensor";
-    %190 : Var<oracle.code.triton.Tensor> = var %189 @"b";
-    %191 : oracle.code.triton.Tensor = var.load %147;
-    %192 : oracle.code.triton.Tensor = var.load %176;
-    %193 : oracle.code.triton.Tensor = var.load %190;
-    %194 : oracle.code.triton.Tensor = invoke %192 %193 @"oracle.code.triton.Triton::dot(oracle.code.triton.Tensor, oracle.code.triton.Tensor)oracle.code.triton.Tensor";
-    %195 : oracle.code.triton.Tensor = invoke %191 %194 @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    var.store %147 %195;
-    %196 : oracle.code.triton.Tensor = var.load %126;
-    %197 : int = var.load %31;
-    %198 : int = var.load %24;
-    %199 : int = mul %197 %198;
-    %200 : java.lang.Integer = invoke %199 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %201 : oracle.code.triton.Tensor = invoke %196 %200 @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    var.store %126 %201;
-    %202 : oracle.code.triton.Tensor = var.load %142;
-    %203 : int = var.load %31;
-    %204 : int = var.load %25;
-    %205 : int = mul %203 %204;
-    %206 : java.lang.Integer = invoke %205 @"java.lang.Integer::valueOf(int)java.lang.Integer";
-    %207 : oracle.code.triton.Tensor = invoke %202 %206 @"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number)oracle.code.triton.Tensor";
-    var.store %142 %207;
-    java.continue;
-};
+java.for @loc="240:9"
+    ()Var<java.type:"int"> -> {
+        %148 : java.type:"int" = constant @loc="240:22" @0;
+        %149 : Var<java.type:"int"> = var %148 @loc="240:14" @"k";
+        yield %149 @loc="240:9";
+    }
+    (%150 : Var<java.type:"int">)java.type:"boolean" -> {
+        %151 : java.type:"int" = var.load %150 @loc="240:25";
+        %152 : java.type:"int" = var.load %22 @loc="240:34";
+        %153 : java.type:"java.lang.Integer" = invoke %152 @loc="240:29" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %154 : java.type:"int" = var.load %31 @loc="240:37";
+        %155 : java.type:"java.lang.Integer" = invoke %154 @loc="240:29" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %156 : java.type:"int" = invoke %153 %155 @loc="240:29" @java.ref:"oracle.code.triton.Triton::cdiv(java.lang.Number, java.lang.Number):int";
+        %157 : java.type:"boolean" = lt %151 %156 @loc="240:25";
+        yield %157 @loc="240:9";
+    }
+    (%158 : Var<java.type:"int">)java.type:"void" -> {
+        %159 : java.type:"int" = var.load %158 @loc="240:52";
+        %160 : java.type:"int" = constant @loc="240:52" @1;
+        %161 : java.type:"int" = add %159 %160 @loc="240:52";
+        var.store %158 %161 @loc="240:52";
+        yield @loc="240:9";
+    }
+    (%162 : Var<java.type:"int">)java.type:"void" -> {
+        %163 : java.type:"oracle.code.triton.Tensor" = var.load %126 @loc="243:26";
+        %164 : java.type:"oracle.code.triton.Tensor" = var.load %110 @loc="244:36";
+        %165 : java.type:"int" = constant @loc="244:44" @0;
+        %166 : java.type:"oracle.code.triton.Tensor" = invoke %164 %165 @loc="244:29" @java.ref:"oracle.code.triton.Triton::expand(oracle.code.triton.Tensor, int):oracle.code.triton.Tensor";
+        %167 : java.type:"int" = var.load %22 @loc="244:48";
+        %168 : java.type:"int" = var.load %162 @loc="244:52";
+        %169 : java.type:"int" = var.load %31 @loc="244:56";
+        %170 : java.type:"int" = mul %168 %169 @loc="244:52";
+        %171 : java.type:"int" = sub %167 %170 @loc="244:48";
+        %172 : java.type:"java.lang.Integer" = invoke %171 @loc="244:21" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %173 : java.type:"oracle.code.triton.Triton$CompareKind" = field.load @loc="244:70" @java.ref:"oracle.code.triton.Triton$CompareKind::LessThan:oracle.code.triton.Triton$CompareKind";
+        %174 : java.type:"oracle.code.triton.Tensor" = invoke %166 %172 %173 @loc="244:21" @java.ref:"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind):oracle.code.triton.Tensor";
+        %175 : java.type:"float" = constant @loc="244:81" @0.0f;
+        %176 : java.type:"oracle.code.triton.Tensor" = invoke %163 %174 %175 @loc="243:21" @java.ref:"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor, float):oracle.code.triton.Tensor";
+        %177 : Var<java.type:"oracle.code.triton.Tensor"> = var %176 @loc="243:13" @"a";
+        %178 : java.type:"oracle.code.triton.Tensor" = var.load %142 @loc="245:26";
+        %179 : java.type:"oracle.code.triton.Tensor" = var.load %110 @loc="246:36";
+        %180 : java.type:"int" = constant @loc="246:44" @1;
+        %181 : java.type:"oracle.code.triton.Tensor" = invoke %179 %180 @loc="246:29" @java.ref:"oracle.code.triton.Triton::expand(oracle.code.triton.Tensor, int):oracle.code.triton.Tensor";
+        %182 : java.type:"int" = var.load %22 @loc="246:48";
+        %183 : java.type:"int" = var.load %162 @loc="246:52";
+        %184 : java.type:"int" = var.load %31 @loc="246:56";
+        %185 : java.type:"int" = mul %183 %184 @loc="246:52";
+        %186 : java.type:"int" = sub %182 %185 @loc="246:48";
+        %187 : java.type:"java.lang.Integer" = invoke %186 @loc="246:21" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %188 : java.type:"oracle.code.triton.Triton$CompareKind" = field.load @loc="246:70" @java.ref:"oracle.code.triton.Triton$CompareKind::LessThan:oracle.code.triton.Triton$CompareKind";
+        %189 : java.type:"oracle.code.triton.Tensor" = invoke %181 %187 %188 @loc="246:21" @java.ref:"oracle.code.triton.Triton::compare(java.lang.Number, java.lang.Number, oracle.code.triton.Triton$CompareKind):oracle.code.triton.Tensor";
+        %190 : java.type:"float" = constant @loc="246:81" @0.0f;
+        %191 : java.type:"oracle.code.triton.Tensor" = invoke %178 %189 %190 @loc="245:21" @java.ref:"oracle.code.triton.Triton::load(oracle.code.triton.Tensor, oracle.code.triton.Tensor, float):oracle.code.triton.Tensor";
+        %192 : Var<java.type:"oracle.code.triton.Tensor"> = var %191 @loc="245:13" @"b";
+        %193 : java.type:"oracle.code.triton.Tensor" = var.load %147 @loc="248:31";
+        %194 : java.type:"oracle.code.triton.Tensor" = var.load %177 @loc="248:48";
+        %195 : java.type:"oracle.code.triton.Tensor" = var.load %192 @loc="248:51";
+        %196 : java.type:"oracle.code.triton.Tensor" = invoke %194 %195 @loc="248:44" @java.ref:"oracle.code.triton.Triton::dot(oracle.code.triton.Tensor, oracle.code.triton.Tensor):oracle.code.triton.Tensor";
+        %197 : java.type:"oracle.code.triton.Tensor" = invoke %193 %196 @loc="248:27" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+        var.store %147 %197 @loc="248:13";
+        %198 : java.type:"oracle.code.triton.Tensor" = var.load %126 @loc="250:26";
+        %199 : java.type:"int" = var.load %31 @loc="250:34";
+        %200 : java.type:"int" = var.load %24 @loc="250:49";
+        %201 : java.type:"int" = mul %199 %200 @loc="250:34";
+        %202 : java.type:"java.lang.Integer" = invoke %201 @loc="250:22" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %203 : java.type:"oracle.code.triton.Tensor" = invoke %198 %202 @loc="250:22" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+        var.store %126 %203 @loc="250:13";
+        %204 : java.type:"oracle.code.triton.Tensor" = var.load %142 @loc="251:26";
+        %205 : java.type:"int" = var.load %31 @loc="251:34";
+        %206 : java.type:"int" = var.load %25 @loc="251:49";
+        %207 : java.type:"int" = mul %205 %206 @loc="251:34";
+        %208 : java.type:"java.lang.Integer" = invoke %207 @loc="251:22" @java.ref:"java.lang.Integer::valueOf(int):java.lang.Integer";
+        %209 : java.type:"oracle.code.triton.Tensor" = invoke %204 %208 @loc="251:22" @java.ref:"oracle.code.triton.Triton::add(java.lang.Number, java.lang.Number):oracle.code.triton.Tensor";
+        var.store %142 %209 @loc="251:13";
+        java.continue @loc="240:9";
+    };
 ```
 
 ### MLIR snippet of (Python) Triton matrix multiply loop
@@ -1163,38 +1149,41 @@ java.for
 ### Triton code model snippet of Java Triton matrix multiply loop
 
 ```
-%76 : int = arith.constant @"0";
-%77 : int = tt.call %17 @"cdiv_int_32_int";
-%78 : int = arith.constant @"1";
-%79 : Tuple<tensor<x32, x64, float>, tensor<x32, x32, ptr<oracle.code.triton.Float16>>, tensor<x32, x64, ptr<oracle.code.triton.Float16>>> = scf.for %76 %77 %78 %75 %63 %74 (%80 : int, %81 : tensor<x32, x64, float>, %82 : tensor<x32, x32, ptr<oracle.code.triton.Float16>>, %83 : tensor<x32, x64, ptr<oracle.code.triton.Float16>>)Tuple<tensor<x32, x64, float>, tensor<x32, x32, ptr<oracle.code.triton.Float16>>, tensor<x32, x64, ptr<oracle.code.triton.Float16>>> -> {
-    %84 : tensor<x1, x32, int> = tt.expand_dims %52 @"0";
-    %85 : int = arith.muli %80 %26;
-    %86 : int = arith.subi %17 %85;
-    %87 : tensor<x1, x32, int> = tt.splat %86;
-    %88 : tensor<x1, x32, int> = arith.cmpi %84 %87 @"slt";
-    %89 : tensor<x32, x32, int> = tt.broadcast %88;
-    %90 : tensor<x32, x32, oracle.code.triton.Float16> = tt.load %82 %89;
-    %91 : tensor<x32, x1, int> = tt.expand_dims %52 @"1";
-    %92 : int = arith.muli %80 %26;
-    %93 : int = arith.subi %17 %92;
-    %94 : tensor<x32, x1, int> = tt.splat %93;
-    %95 : tensor<x32, x1, int> = arith.cmpi %91 %94 @"slt";
-    %96 : tensor<x32, x64, int> = tt.broadcast %95;
-    %97 : tensor<x32, x64, oracle.code.triton.Float16> = tt.load %83 %96;
-    %98 : tensor<x32, x64, float> = tt.dot %90 %97;
-    %99 : tensor<x32, x64, float> = arith.addf %81 %98;
-    %100 : int = arith.muli %26 %19;
-    %101 : tensor<x32, x32, int> = tt.splat %100;
-    %102 : tensor<x32, x32, ptr<oracle.code.triton.Float16>> = tt.addptr %82 %101;
-    %103 : int = arith.muli %26 %20;
-    %104 : tensor<x32, x64, int> = tt.splat %103;
-    %105 : tensor<x32, x64, ptr<oracle.code.triton.Float16>> = tt.addptr %83 %104;
-    scf.yield %99 %102 %105;
+%76 : java.type:"int" = arith.constant @value=0;
+%77 : java.type:"int" = tt.call %17 @callee="cdiv_int_32_int";
+%78 : java.type:"int" = arith.constant @value=1;
+%79 : Tuple<tensor<x32, x64, java.type:"float">, tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>, tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>> = scf.for %76 %77 %78 %75 %63 %74 (%80 : java.type:"int", %81 : tensor<x32, x64, java.type:"float">, %82 : tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>, %83 : tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>)Tuple<tensor<x32, x64, java.type:"float">, tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">>, tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">>> -> {
+    %84 : tensor<x1, x32, java.type:"int"> = tt.expand_dims %52 @axis=0;
+    %85 : java.type:"int" = arith.muli %80 %26;
+    %86 : java.type:"int" = arith.subi %17 %85;
+    %87 : tensor<x1, x32, java.type:"int"> = tt.splat %86;
+    %88 : tensor<x1, x32, java.type:"boolean"> = arith.cmpi %84 %87 @predicate="slt";
+    %89 : tensor<x32, x32, java.type:"boolean"> = tt.broadcast %88;
+    %90 : tensor<x32, x32, java.type:"oracle.code.triton.Float16"> = arith.constant @value=0.0f;
+    %91 : tensor<x32, x32, java.type:"oracle.code.triton.Float16"> = tt.load %82 %89 %90;
+    %92 : tensor<x32, x1, java.type:"int"> = tt.expand_dims %52 @axis=1;
+    %93 : java.type:"int" = arith.muli %80 %26;
+    %94 : java.type:"int" = arith.subi %17 %93;
+    %95 : tensor<x32, x1, java.type:"int"> = tt.splat %94;
+    %96 : tensor<x32, x1, java.type:"boolean"> = arith.cmpi %92 %95 @predicate="slt";
+    %97 : tensor<x32, x64, java.type:"boolean"> = tt.broadcast %96;
+    %98 : tensor<x32, x64, java.type:"oracle.code.triton.Float16"> = arith.constant @value=0.0f;
+    %99 : tensor<x32, x64, java.type:"oracle.code.triton.Float16"> = tt.load %83 %97 %98;
+    %100 : tensor<x32, x64, java.type:"float"> = arith.constant @value=0.0f;
+    %101 : tensor<x32, x64, java.type:"float"> = tt.dot %91 %99 %100;
+    %102 : tensor<x32, x64, java.type:"float"> = arith.addf %81 %101;
+    %103 : java.type:"int" = arith.muli %26 %21;
+    %104 : tensor<x32, x32, java.type:"int"> = tt.splat %103;
+    %105 : tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">> = tt.addptr %82 %104;
+    %106 : java.type:"int" = arith.muli %26 %19;
+    %107 : tensor<x32, x64, java.type:"int"> = tt.splat %106;
+    %108 : tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">> = tt.addptr %83 %107;
+    scf.yield %102 %105 %108;
 };
-%106 : tensor<x32, x64, float> = tuple.load %79 @"0";
-%107 : tensor<x32, x32, ptr<oracle.code.triton.Float16>> = tuple.load %79 @"1";
-%108 : tensor<x32, x64, ptr<oracle.code.triton.Float16>> = tuple.load %79 @"2";
-%109 : tensor<x32, x64, oracle.code.triton.Float16> = arith.truncf %106;
+%109 : tensor<x32, x64, java.type:"float"> = tuple.load %79 @0;
+%110 : tensor<x32, x32, ptr<java.type:"oracle.code.triton.Float16">> = tuple.load %79 @1;
+%111 : tensor<x32, x64, ptr<java.type:"oracle.code.triton.Float16">> = tuple.load %79 @2;
+%112 : tensor<x32, x64, java.type:"oracle.code.triton.Float16"> = arith.truncf %109;
 ```
 
 
