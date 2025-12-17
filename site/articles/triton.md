@@ -17,7 +17,7 @@ understanding of Code Reflection and its capabilities.
 
 ## Triton
 
-[Triton][Triton-intro] is a domain-specific programming model and compiler
+[Triton][Triton-intro] is a domain-specific programming model that compiler
 developers can use to write programs in Python that compile to GPU code.
 
 Triton enables developers with little or no experience of GPU hardware and
@@ -50,7 +50,7 @@ size must be constant (in addition the size must be a power of two).
 
 ### Vector addition
 
-To explain the programing model we shall present a simple example, vector
+To explain the programming model we shall present a simple example, vector
 addition. This example is instructive even though it can be easily written in
 CUDA.
 
@@ -100,7 +100,7 @@ identifies it as a Triton program.
 
 This program is designed to be compiled to a GPU program and executed multiple
 times in parallel on the GPU. Each execution will have a program identifier
-associated with it, obtained by calling the Triton langauge API
+associated with it, obtained by calling the Triton language API
 method `program_id`. This is not a thread identifier, although developers
 familiar with CUDA will likely recognize that it is used in similar manner.
 
@@ -295,7 +295,7 @@ module {
 
 MLIR programs have the property of Static Single-Assignment (SSA). We refer to
 variables that can only be assigned once as values (they are a bit like final
-variables in Java) .e.g., value `%0` can never be modified.
+variables in Java) e.g., value `%0` can never be modified.
 
 Notice that there are only four parameters corresponding to values `%arg0`
 to `%arg3`: three pointers to 32-bit floats corresponding to the two input
