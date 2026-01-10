@@ -8,7 +8,7 @@
 - [Key Takeaways](#key-takeaways)
 - [Introduction](#introduction)
 - [HAT Overview](#introduction-to-hat)
-- [How Code-Reflection is used in HAT?](#how-code-reflection-is-used-in-hat)
+- [How Code Reflection is used in HAT?](#how-code-reflection-is-used-in-hat)
 - [Where can you run HAT?](#where-can-you-run-hat)
 - [Optimizing Matrix Multiplication in Java for GPUs with HAT](#optimizing-gpu-programs-from-java-using-babylon-and-hat)
   - [CPU and GPU baselines](#baseline-for-cpus)
@@ -30,9 +30,8 @@
 
 ## Introduction
 
-The project [Babylon](https://github.com/openjdk/babylon) is a new OpenJDK project with the goal of enhancing code reflection APIs for the Java platform, allowing to reflect code from Java methods and Java lambdas, and being able
-to query their intermediate representation, called code-models. 
-These code models can be used at runtime to modify the code, perform optimizations, and/or perform code transformations to other programming models. Furthermore, code-reflection allows Java developers to interact with foreign programming models and foreign programming languages without using any 3rd party libraries. 
+The project [Babylon](https://github.com/openjdk/babylon) is a new OpenJDK project with the goal of enhancing Java reflection, allowing to reflect code from Java methods and Java lambdas, and being able to query their symbolic representation, called code models. 
+These code models can be used at runtime to modify the code, perform optimizations, and/or perform code transformations to other programming models. Furthermore, code reflection allows Java developers to interact with foreign programming models and foreign programming languages without using any 3rd party libraries. 
 
 One of the foreign programming environments we are exploring in the project Babylon is the GPU environment through the CUDA and OpenCL programming models, called [HAT](https://github.com/openjdk/babylon/tree/code-reflection/hat) (Heterogeneous Accelerator Toolkit). The goal for HAT is to be able to offload and run efficient parallel workloads on hardware accelerators.
 
@@ -42,7 +41,7 @@ Through this article, we want to tackle these two questions:
 
 Each of these questions presents its own set of challenges. The majority of the projects focus on the first challenge with projects such as [Sumatra](https://openjdk.org/projects/sumatra/), [Aparapi](https://github.com/Syncleus/aparapi), [Marawacc](https://github.com/jjfumero/marawacc), [RootBeer](https://github.com/bsletten/rootbeer1), [JaBEE](https://dl.acm.org/doi/10.1145/2159430.2159439), [IBM J9](https://github.com/eclipse-openj9/openj9/blob/master/jcl/src/openj9.cuda/share/classes/com/ibm/cuda/Cuda.java), and more recently [TornadoVM](https://github.com/beehive-lab/TornadoVM). These projects have focused on abstracting GPU programmability and make it easier for Java developers. While they achieve reasonable high performance (e.g., [TornadoVM's study](https://dl.acm.org/doi/epdf/10.1145/3313808.3313819)) by leveraging specialized accelerators, they often do so at the cost of hindering access to advanced GPU optimizations. However, in the era of AI and high-demand computing, simply being faster than Java on CPUs might not be enough.
 
-The second question goes a step further and rethink about how Java programmers could approach native performance on hardware accelerators while still maintaining reasonable high-level constructs. This is a very thin line between what to expose from low-level APIs and from what level of the native software stack. The HAT project tackles GPU programming from a perspective of a performance engineer wanting to efficiently interconnect the Java software stack with foreign GPU programming models. As we will see in this article, this allows programmers to perform fine-tuned optimizations for GPUs. We will look at the details, but in a nutshell, this is being possible because of recent innovations within the JDK development, such as Project Panama and its foreign function API, Project Babylon with its enhanced code-reflection APIs and HAT.
+The second question goes a step further and rethink about how Java programmers could approach native performance on hardware accelerators while still maintaining reasonable high-level constructs. This is a very thin line between what to expose from low-level APIs and from what level of the native software stack. The HAT project tackles GPU programming from a perspective of a performance engineer wanting to efficiently interconnect the Java software stack with foreign GPU programming models. As we will see in this article, this allows programmers to perform fine-tuned optimizations for GPUs. We will look at the details, but in a nutshell, this is being possible because of recent innovations within the JDK development, such as Project Panama and its foreign function API, Project Babylon with its enhanced code reflection APIs and HAT.
 
 In this article, we’ll take a hands-on approach to GPU programming from Java, using Babylon and HAT to implement and optimize the matrix multiplication application, one of the key algorithms widely used in AI and Large Language Models (LLMs) these days.
 Some of the implementations are inspired on the excellent blog from [Simon Boehm](https://siboehm.com/articles/22/CUDA-MMM), who applied a set of CUDA optimizations for the SGEMM algorithm to be able to run as close as cuBLAS (native GPU library for linear algebra) as possible. 
@@ -53,7 +52,7 @@ We’ll step through each layer of optimization expressed in Java and HAT, analy
 
 This article explores how Project Babylon and HAT can be leveraged to optimize code for GPU architectures. While we cover the fundamental GPU programming and execution models necessary for the HAT development, readers with prior experience in GPU programming will find these concepts familiar.
 
-We specifically target Java developers interested in how the new code-reflection enables GPU acceleration directly from the Java ecosystem, and how some Java applications can be accelerated on modern hardware. Furthermore, while the primary focus of HAT is GPUs, the optimization techniques discussed in this article can be applicable to other hardware accelerators and foreign language interfaces.
+We specifically target Java developers interested in how the new code reflection enables GPU acceleration directly from the Java ecosystem, and how some Java applications can be accelerated on modern hardware. Furthermore, while the primary focus of HAT is GPUs, the optimization techniques discussed in this article can be applicable to other hardware accelerators and foreign language interfaces.
 
 ## Introduction to HAT
 
@@ -104,10 +103,10 @@ public static void vectorMultiplicationHAT(@RO KernelContext kc, @RO F32Array ar
 }
 ```
 
-First, we annotate the code with the `@Reflect` annotation from the code-reflection API. 
+First, we annotate the code with the `@Reflect` annotation from the code reflection API. 
 This indicates the HAT compiler to offload this entire method to the GPU, from which it can obtain the code-model, perform a set of transformations (for example represent parallel constructs directly in the code-model), and generate the GPU code. 
 
-From the HAT kernel code above, we also see that there are different argument types that are passed as parameters:
+From the HAT kernel code above, we also see that there are different method parameter types:
 - `KernelContext`: each kernel method receives a kernel context object. This is a special object in HAT, as we introduced earlier, that provides the built-ins functions to access parallel GPU constructs (e.g., the global thread-id - `kc.gix`).
 - `F32Array`: These objects correspond to HAT data types to represent `float[]` in Java. The difference is that they are implemented on top of the Panama FFM API. Programmers can also provide their own data types by extending the HAT `Buffer` interface. For example, the following code snippet defines an array of `short` values:
 
@@ -124,7 +123,7 @@ public interface MyArray extends Buffer {
 ```
 
 Note also that parameters are tagged with the `@RO` (Read-Only), and `@RW` (Read-Write) Java annotations. 
-This indicates the HAT runtime how to move data from the CPU to the GPU and vice-versa, since memory between discrete GPUs and the CPU is not shared. 
+This indicates the HAT runtime how to move data from the CPU to the GPU and vice versa, since memory between discrete GPUs and the CPU is not shared. 
 However, this is quite likely going to change in future versions of HAT, becoming an optional tag.
 
 From the kernel-context object, we can obtain the thread-id, and that's the equivalent to our loop-index from the Java version.
@@ -205,11 +204,11 @@ If, for example, `arrayA` is of size 1024, we can create four groups of 256 thre
 
 Another important observation is that the `computeContext` is also annotated with `@Reflect`. 
 This allows the HAT runtime and the HAT compiler to inspect all reachable kernels (methods to accelerate) and optimize the data flow across those kernels.
-Next, let's take a look at how HAT compiles code and how it interacts with code-reflection. 
+Next, let's take a look at how HAT compiles code and how it interacts with code reflection. 
 
-## How Code-Reflection is used in HAT? 
+## How Code Reflection is used in HAT? 
 
-The following diagram shows an abstract representation of all components of the HAT software stack and how they interact with code-reflection. 
+The following diagram shows an abstract representation of all components of the HAT software stack and how they interact with code reflection. 
 The left-hand side of the diagram shows the Java program with the kernel method on the top, and the compute method with its ND-range definition.
 At the bottom-left, we have an invocation to an accelerator.
 We haven't introduced this yet. This is just an object that bundles a hardware accelerator with an entry point in the compute layer. 
@@ -220,7 +219,7 @@ Between `accelerator` and the `compute` layers, programmers can compose complex 
 </p>
 
 Furthermore, the accelerator and the compute-layers are used to build the whole compute-graph. 
-This is the time in which HAT retrieves all reachable code-models from the code-reflection API that are annotated with `@Reflect`, builds its code-model, and passes a set of transformation to translate the original code-model into a GPU-friendly code-model. 
+This is the time in which HAT retrieves all reachable code models from the code reflection API that are annotated with `@Reflect`, builds its code model, and passes a set of transformation to translate the original code model into a GPU-friendly code model. 
 
 When all transformation are performed, HAT generates the corresponding low-level code.
 If we dispatch the application with the CUDA backend, HAT generates an equivalent CUDA program.
@@ -370,7 +369,7 @@ However, if you are running this example on another GPU, you may need to tune th
 
 The GPU version takes **95ms (3x faster than the Java Parallel Stream version)** (the GPU kernel elapsed time only, meaning that we exclude communications between the CPU and the GPU; more in this later).
 Thus, this means $3x$ times faster than the previous version on the CPU, but, can we do better with HAT?  
-To profiler the generated GPU kernel by HAT, we use the NVIDIA Nsight profiler analysis.
+To profile the generated GPU kernel by HAT, we use the NVIDIA Nsight profiler analysis.
 The following table shows the summary of the `ncu` profiler:
 
 ```bash
@@ -407,7 +406,7 @@ So, to do that, let's jump to our first optimization in HAT.
 
 For GPU programmers (e.g., CUDA, OpenCL or SYCL programmers), this 2D representation is a straightforward representation of the program, and for GPU developers, this should be the initial way to express the GPU kernel. However, this might not be so trivial for Java developers, and for good reasons! Java developers do not have to think about GPU architectures and GPU execution models. 
 
-But this strengths one of the key messages of this article: **code-reflection, and Babylon, allows developers to enable specific optimizations when targeting foreign programming languages**, such as CUDA. 
+But this strengths one of the key messages of this article: **code reflection, and Babylon, allows developers to enable specific optimizations when targeting foreign programming languages**, such as CUDA. 
 
 The parallelization constructs of many the programming languages are in 1D (one dimensional), and this includes Java. 
 However, some parallel programming models (e.g., CUDA and OpenCL) exposes multidimensional constructs to facilitate representation of parallel programs. 
@@ -422,7 +421,7 @@ The following Java code snippet shows the HAT GPU kernel for expressing the matr
 @Reflect
 public static void matrixMultiplyKernel2D(@RO KernelContext kc, @RO F32Array matrixA, @RO F32Array matrixB, @RW F32Array matrixC, int size) {
     if (kc.gix < kc.gsx) {       // control for 1D range  ( thread id 1D -> kc.gix )
-        if (kc.giy < kc.gsy) {.  // conntrol for 2D range ( thread id 2D -> kc.giy )
+        if (kc.giy < kc.gsy) {   // conntrol for 2D range ( thread id 2D -> kc.giy )
             float acc = 0.0f;
             for (int k = 0; k < size; k++) {
                 acc += (matrixA.array(kc.gix * size + k) * matrixB.array(k * size + kc.giy));
@@ -537,7 +536,7 @@ But this is not how the CUDA thread mapping works. As mentioned in the [NVIDIA C
 
 The `threadIdx.x` in CUDA is a built-in to access the local thread-id (thread-id within a block). In HAT, this is the equivalent of `kernelContext.lix`. Note that these built-in functions in HAT are common for all backends, including OpenCL and CUDA. 
 
-But, what does this means in practice? For instance, if we have a $4x4$ thread block, the way consecutive threads are organized are as follows:
+But, what does this mean in practice? For instance, if we have a $4x4$ thread block, the way consecutive threads are organized are as follows:
 ```bash
 (0, 0), (1, 0), (2, 0), (3, 0), (1, 0), (1, 1), (2, 1), (3, 1), ...
 ```
@@ -555,13 +554,16 @@ Instead, what we want is the following:
 </p>
 
 
-To achieve this we can swap the indexes between `kc.gix` and `kc.gsy`. The following code snippet shows the transformation in HAT:
+To achieve this, we can swap the indexes between `kc.gix` and `kc.giy`. 
+Thus, instead of `matrixA.array(kc.gix * size + k)`, we change the indexing to `matrixA.array(kc.giy * size + k)`.
+We also do the same for the second matrix (`matrixB`).
+The following code snippet shows the new version in HAT:
 
 ```java
 @Reflect
 public static void matrixMultiplyKernel2DLI(@RO KernelContext kc, @RO F32Array matrixA, @RO F32Array matrixB, @RW F32Array matrixC, int size) {
-    if (kc.gix < kc.gsx) {
-        if (kc.giy < kc.gsy) {
+    if (kc.giy < kc.gsy) {            // swapped gix -> giy
+        if (kc.gix < kc.gsx) {        // swapped giy -> gix
             float acc = 0.0f;
             for (int k = 0; k < size; k++) {
                 acc += (matrixA.array(kc.giy * size + k) * matrixB.array(k * size + kc.gix));
@@ -621,7 +623,7 @@ The global memory is also often called VRAM.
 There is also a section in the GPU's global memory dedicated to constant memory, in which programmers can place data that is not going to be written back. 
 For some applications, using the constant memory can provide some performance boost. 
 
-In HAT, we use the global memory when passing parameters to the kernel (e.g, the `F32Array` that is pass as a parameter to the kernel function).
+In HAT, we use the global memory when passing arguments to the kernel (e.g, the `F32Array` that is pass as a parameter to the kernel function).
 Currently, in HAT, we can't use the constant memory of the GPU, but there are plans to expose it to Java programmers too. 
 
 Moving on, we have the L2 cache. 
@@ -680,7 +682,7 @@ code generator.
 #### But, how do we distinguish if this type is going to be used in private or shared memory?
 
 HAT provides some utility marker methods such as `createLocal` for a shared data structure, and `createPrivate` for private data structure. 
-These two methods can return `null` from the Java implementation because they are never meant to be executed on the host side (the CPU from Java, at least for now), only from on the device (the GPU). Thus they are only used as markers for the HAT code generator. 
+These two methods can return `null` from the Java implementation because they are never meant to be executed on the host side (the CPU from Java, at least for now), only from on the device (the GPU). Thus, they are only used as markers for the HAT code generator. 
 
 The HAT compiler will build a C99-struct with the members of the passed interface. 
 For example, if we declare the `MyLocalArray` in shared memory:
@@ -777,7 +779,7 @@ and we can access in the 3-dimensions (`lix`, `liy` and `lix` for 1D, 2D and 3D 
 This version takes $1.65ms$ ($1.33x$ faster than the previous version). This one makes use of many of the GPU programmable features, such as accessing local memory, barriers, accessing local-thread-ids and group IDs.
 However, we still see the GPU utilization higher than 80% for both compute and memory throughput (95% for both). 
 
-By analyzing the source profiling (the source section of the `ncu` tool), we see that the 33% of the time is spent in data copies from global memory to local memory and vice-versa. Besides, a high number of warp (set of 32 consecutive threads on an NVIDIA GPU) stalls are spent in the actual reduction (computation). We can alleviate this problem with our next optimization, register tiling, and increase the work to be done per thread. 
+By analyzing the source profiling (the source section of the `ncu` tool), we see that the 33% of the time is spent in data copies from global memory to local memory and vice versa. Besides, a high number of warp (set of 32 consecutive threads on an NVIDIA GPU) stalls are spent in the actual reduction (computation). We can alleviate this problem with our next optimization, register tiling, and increase the work to be done per thread. 
 
 ### Fourth Optimization: Register Tiling
 
@@ -1151,7 +1153,7 @@ Although we have demonstrated eight specific kernels, HAT is actively evolving. 
 
 ## Conclusions
 
-In this article we have explored how the project Babylon with its enhanced code-reflection APIs along with HAT, a parallel programming framework for offloading Java programs onto modern such as GPUs can unlock GPU acceleration and achieve performance close to native CUDA implementations. 
+In this article we have explored how the project Babylon with its enhanced code reflection APIs along with HAT, a parallel programming framework for offloading Java programs onto modern such as GPUs can unlock GPU acceleration and achieve performance close to native CUDA implementations. 
 
 By progressively optimizing the matrix-multiplication example from Java using HAT built-ins and HAT parallel constructs, we have shown how to apply advanced GPU optimizations such as 2D Local Ranges, loop tiling, shared memory, register tiling, vectorization and transformations to narrowed types such as FP16 in order to increase performance from single-digit GFLOP/s to over 12 TFLOP/s on GPUs. 
 
