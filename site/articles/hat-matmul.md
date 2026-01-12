@@ -4,8 +4,14 @@
 
 #### January 2026 {.date}
 
+## Key Takeaways 
+
+- [The Heterogeneous Accelerator Toolkit (HAT)](https://github.com/openjdk/babylon/tree/code-reflection/hat) is a parallel programming framework that allows Java developers to offload Java code and dispatch the generated code on modern hardware accelerators, such as Graphics Processing Units (GPUs).
+- HAT can be used to speed up massive parallel workloads such as Deep Learning, AI, big data analytics and physic simulations, just to name a few, by automatically offloading and running these workloads on specialized hardware.
+- HAT provides programming abstractions to facilitate GPU programming from Java: some key abstractions are an ND-Range API, a compute-layer and a kernel layer which allow Java developers to write explicit parallel code that can be offloaded to GPUs. Besides HAT provides memory abstractions that facilitate the usage of custom data structures and efficiently map them to the different memory regions of the GPUs.
+- This article provides an overview of the HAT programming model: using the matrix-multiplication as an example, we demonstrate how Java developers can tune GPU workloads from the Java side to achieve performance close to native cuBLAS, scaling from 7 GFLOP/s on CPUs to 14 TFLOP/s on an NVIDIA A10 GPU. 
+
 ## Outline
-- [Key Takeaways](#key-takeaways)
 - [Introduction](#introduction)
 - [HAT Overview](#introduction-to-hat)
 - [How Code Reflection is used in HAT?](#how-code-reflection-is-used-in-hat)
@@ -20,13 +26,6 @@
   - [Computing with 16-bits Floating-Point Numbers](#sixth-optimization-introducing-fp16)
   - [Comparing to Native cuBLAS](#comparing-hat-vs-native-cuda-cublas)
 - [Conclusions](#conclusions)
-
-## Key Takeaways 
-
-- [The Heterogeneous Accelerator Toolkit (HAT)](https://github.com/openjdk/babylon/tree/code-reflection/hat) is a parallel programming framework that allows Java developers to offload Java code and dispatch the generated code on modern hardware accelerators, such as Graphics Processing Units (GPUs).
-- HAT can be used to speed up massive parallel workloads such as Deep Learning, AI, big data analytics and physic simulations, just to name a few, by automatically offloading and running these workloads on specialized hardware.
-- HAT provides programming abstractions to facilitate GPU programming from Java: some key abstractions are an ND-Range API, a compute-layer and a kernel layer which allow Java developers to write explicit parallel code that can be offloaded to GPUs. Besides HAT provides memory abstractions that facilitate the usage of custom data structures and efficiently map them to the different memory regions of the GPUs.
-- This article provides an overview of the HAT programming model: using the matrix-multiplication as an example, we demonstrate how Java developers can tune GPU workloads from the Java side to achieve performance close to native cuBLAS, scaling from 7 GFLOP/s on CPUs to 14 TFLOP/s on an NVIDIA A10 GPU. 
 
 ## Introduction
 
@@ -96,7 +95,10 @@ What we have done is to define a method that expresses the work to be done per i
 
 ```java
 @Reflect
-public static void vectorMultiplicationHAT(@RO KernelContext kc, @RO F32Array arrayA, @RO F32Array arrayB, @RW F32Array arrayC) {
+public static void vectorMultiplicationHAT(@RO KernelContext kc, 
+                                           @RO F32Array arrayA, 
+                                           @RO F32Array arrayB, 
+                                           @RW F32Array arrayC) {
     int valueA = arrayA.array(kc.gix);
     int valueB = arrayB.array(kc.gix);
     arrayC.array(kc.gix, (valueA * valueB));
@@ -137,7 +139,10 @@ The complete version of the kernel is defined as follows:
 
 ```java
 @Reflect
-public static void vectorMultiplicationHAT(@RO KernelContext kc, @RO F32Array arrayA, @RO F32Array arrayB, @RW F32Array arrayC) {
+public static void vectorMultiplicationHAT(@RO KernelContext kc, 
+                                           @RO F32Array arrayA, 
+                                           @RO F32Array arrayB, 
+                                           @RW F32Array arrayC) {
     if (kc.gix < arrayA.length()) {
         int valueA = arrayA.array(kc.gix);
         int valueB = arrayB.array(kc.gix);
@@ -181,7 +186,10 @@ Next, we need a way to specify the total number of threads (or how many iteratio
 
 ```java
 @Reflect
-public static void computeContext(@RO ComputeContext cc, @RO F32Array arrayA, @RO F32Array arrayB, @RW F32Array arrayC) {
+public static void computeContext(@RO ComputeContext cc, 
+                                  @RO F32Array arrayA, 
+                                  @RO F32Array arrayB, 
+                                  @RW F32Array arrayC) {
     NDRange ndRange = NDRange.of(Global1D.of(arrayA.length()));
     cc.dispatchKernel(ndRange, kc -> vectorMultiplicationHAT(kc, arrayA, arrayB, arrayC));
 }
@@ -419,12 +427,19 @@ The following Java code snippet shows the HAT GPU kernel for expressing the matr
 
 ```java
 @Reflect
-public static void matrixMultiplyKernel2D(@RO KernelContext kc, @RO F32Array matrixA, @RO F32Array matrixB, @RW F32Array matrixC, int size) {
-    if (kc.gix < kc.gsx) {       // control for 1D range  ( thread id 1D -> kc.gix )
-        if (kc.giy < kc.gsy) {   // conntrol for 2D range ( thread id 2D -> kc.giy )
+public static void matrixMultiplyKernel2D(@RO KernelContext kc, 
+                                          @RO F32Array matrixA, 
+                                          @RO F32Array matrixB, 
+                                          @RW F32Array matrixC, 
+                                          int size) {
+    // control for 1D range  ( thread id 1D -> kc.gix )
+    if (kc.gix < kc.gsx) {
+        // conntrol for 2D range ( thread id 2D -> kc.giy )
+        if (kc.giy < kc.gsy) {   
             float acc = 0.0f;
             for (int k = 0; k < size; k++) {
-                acc += (matrixA.array(kc.gix * size + k) * matrixB.array(k * size + kc.giy));
+                acc += (matrixA.array(kc.gix * size + k) 
+                        * matrixB.array(k * size + kc.giy));
             }
             matrixC.array(kc.gix * size + kc.giy, acc);
         }
@@ -561,7 +576,11 @@ The following code snippet shows the new version in HAT:
 
 ```java
 @Reflect
-public static void matrixMultiplyKernel2DLI(@RO KernelContext kc, @RO F32Array matrixA, @RO F32Array matrixB, @RW F32Array matrixC, int size) {
+public static void matrixMultiplyKernel2DLI(@RO KernelContext kc, 
+                                            @RO F32Array matrixA, 
+                                            @RO F32Array matrixB, 
+                                            @RW F32Array matrixC, 
+                                            int size) {
     if (kc.giy < kc.gsy) {            // swapped gix -> giy
         if (kc.gix < kc.gsx) {        // swapped giy -> gix
             float acc = 0.0f;
@@ -713,8 +732,11 @@ and copies back the result from shared to global memory in the result array.
 
 ```java
 @Reflect
-public static void matrixMultiplyKernel2DTiling(@RO KernelContext kc, @RO F32Array matrixA, @RO F32Array matrixB, @RW F32Array matrixC, int size) {
-
+public static void matrixMultiplyKernel2DTiling(@RO KernelContext kc, 
+                                                @RO F32Array matrixA, 
+                                                @RO F32Array matrixB, 
+                                                @RW F32Array matrixC, 
+                                                int size) {
     final int tileSize = 16;
     MyLocalArray tileA = MyLocalArray.createLocal();
     MyLocalArray tileB = MyLocalArray.createLocal();
