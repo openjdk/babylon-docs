@@ -68,7 +68,7 @@ As we have mentioned, HAT is a programming toolkit that enables Java developers 
 Let's take a simple example to see all these concepts in practice. We are going to express vector multiplication for `float` arrays. Let's start with the Java code:
 
 ```java
-public void vectorMultiplication(float[] a, float[] b, float[] c) {
+public void vectorMul(float[] a, float[] b, float[] c) {
     for (int i = 0; i < a.length; i++) {
         c[i] = a[i] * b[i];
     }
@@ -84,7 +84,7 @@ public void compute(int i, float[] a, float[] b, float[] c) {
     c[i] = a[i] * b[i];
 }
 
-public void vectorMultiplication(float[] a, float[] b, float[] c) {
+public void vectorMul(float[] a, float[] b, float[] c) {
     for (int i = 0; i < a.length; i++) {
         compute(i, a, b, c);
     }
@@ -95,10 +95,10 @@ What we have done is to define a method that expresses the work to be done per i
 
 ```java
 @Reflect
-public static void vectorMultiplicationHAT(@RO KernelContext kc, 
-                                           @RO F32Array arrayA, 
-                                           @RO F32Array arrayB, 
-                                           @RW F32Array arrayC) {
+public static void vectorMul(@RO KernelContext kc, 
+                             @RO F32Array arrayA, 
+                             @RO F32Array arrayB, 
+                             @RW F32Array arrayC) {
     int valueA = arrayA.array(kc.gix);
     int valueB = arrayB.array(kc.gix);
     arrayC.array(kc.gix, (valueA * valueB));
@@ -139,10 +139,10 @@ The complete version of the kernel is defined as follows:
 
 ```java
 @Reflect
-public static void vectorMultiplicationHAT(@RO KernelContext kc, 
-                                           @RO F32Array arrayA, 
-                                           @RO F32Array arrayB, 
-                                           @RW F32Array arrayC) {
+public static void vectorMulHat(@RO KernelContext kc, 
+                                @RO F32Array arrayA, 
+                                @RO F32Array arrayB, 
+                                @RW F32Array arrayC) {
     if (kc.gix < arrayA.length()) {
         int valueA = arrayA.array(kc.gix);
         int valueB = arrayB.array(kc.gix);
@@ -191,7 +191,8 @@ public static void computeContext(@RO ComputeContext cc,
                                   @RO F32Array arrayB, 
                                   @RW F32Array arrayC) {
     NDRange ndRange = NDRange.of(Global1D.of(arrayA.length()));
-    cc.dispatchKernel(ndRange, kc -> vectorMultiplicationHAT(kc, arrayA, arrayB, arrayC));
+    cc.dispatchKernel(ndRange, 
+                kc -> vectorMulHAT(kc, arrayA, arrayB, arrayC));
 }
 ```
 
@@ -205,7 +206,8 @@ We will analyze this in more detail when we optimize the matrix-multiplication a
 For example, if we want to specify a block size of 256 threads, we can do the following:
 
 ```java
-NDRange ndRange = NDRange.of(Global1D.of(arrayA.length()), Local1D.of(256));
+NDRange ndRange = NDRange.of(Global1D.of(arrayA.length()), 
+                             Local1D.of(256));
 ```
 
 If, for example, `arrayA` is of size 1024, we can create four groups of 256 threads. 
@@ -342,16 +344,19 @@ Our first kernel is configured to run in 1D kernel.
 
 ```java
 @Reflect
-public static void matrixMultiplyKernel1D(@RO KernelContext kc,   // GPU context
-                                          @RO F32Array matrixA,   // first matrix
-                                          @RO F32Array matrixB,   // second matrix
-                                          @RW F32Array matrixC,   // result matrix
-                                          int size) {             
+public static void matrixMultiplyKernel1D(
+    @RO KernelContext kc,   // GPU context
+    @RO F32Array matrixA,   // first matrix
+    @RO F32Array matrixB,   // second matrix
+    @RW F32Array matrixC,   // result matrix
+    int size) {             
+
     if (kc.gix < size) {
         for (int j = 0; j < size; j++) {
             float acc = 0.0f;
             for (int k = 0; k < size; k++) {
-                acc += (matrixA.array(kc.gix * size + k) * matrixB.array(k * size + j));
+                acc += (matrixA.array(kc.gix * size + k) 
+                       * matrixB.array(k * size + j));
             }
             matrixC.array(kc.gix * size + j, acc);
         }
@@ -381,18 +386,26 @@ To profile the generated GPU kernel by HAT, we use the NVIDIA Nsight profiler an
 The following table shows the summary of the `ncu` profiler:
 
 ```bash
- matrixMultiplyKernel1D (64, 1, 1)x(16, 1, 1), Context 1, Stream 13, Device 0, CC 8.6
+ matrixMultiplyKernel1D (64, 1, 1)x(16, 1, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
     ----------------------- ----------- ------------
-    DRAM Frequency                  Ghz         6.24  // Main Memory Frecuency
-    SM Frequency                    Mhz       885.00  // Frequency of the Stream Multiprocessor of the GPU (equivalent to a CPU core)
-    Elapsed Cycles                cycle     84774133  // GPU cycles consumed
-    Memory Throughput                 %        18.71  // % of the peak memory throughput consumed
-    Duration                         ms        95.79  // Kernel duration in ms 
+    // Main Memory Frecuency
+    DRAM Frequency                  Ghz         6.24  
+    // Frequency of the Stream Multiprocessor of the GPU
+    // (equivalent to a CPU core)
+    SM Frequency                    Mhz       885.00  
+    // GPU cycles consumed
+    Elapsed Cycles                cycle     84774133  
+    // % of the peak memory throughput consumed
+    Memory Throughput                 %        18.71  
+    // Kernel duration in ms 
+    Duration                         ms        95.79  
     ...
-    Compute (SM) Throughput           %         4.40  // % of the peak compute throughput consumed
+    // % of the peak compute throughput consumed
+    Compute (SM) Throughput           %         4.40  
     ----------------------- ----------- ------------
 ```
 
@@ -459,10 +472,14 @@ When we launch the kernel, we express a 2D `NDRange` as follows:
 
 ```java
 final int globalSize = 1024;
-var ndRange = NDRange.of(Global2D.of(globalSize, globalSize), Local2D.of(16, 16));
+var ndRange = NDRange.of(Global2D.of(globalSize, globalSize), 
+                         Local2D.of(16, 16));
 cc.dispatchKernel(ndRange,
-    kc -> matrixMultiplyKernel2D(kc, matrixA, matrixB, matrixC, globalSize)
-);
+    kc -> matrixMultiplyKernel2D(kc, 
+                                matrixA, 
+                                matrixB, 
+                                matrixC, 
+                                globalSize));
 ```
 
 This new version launches $1024x1024$ threads in blocks of $16x16$. As a HAT programmer, we can play with different values of block sizes.
@@ -482,7 +499,8 @@ Let's go back to our profiler. This new 2D version in HAT takes $9.05ms$ (this i
 Let’s take a look at the performance metrics.  
 
 ```bash
-matrixMultiplyKernel2D (64, 64, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+matrixMultiplyKernel2D (64, 64, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -541,7 +559,8 @@ Analyzing our previous 2D kernel, we see that the memory accessing pattern is no
 This refers to this line of the Java code:
 
 ```java
-acc += (matrixA.array(kc.gix * size + k) * matrixB.array(k * size + kc.giy));
+acc += (matrixA.array(kc.gix * size + k) 
+       * matrixB.array(k * size + kc.giy));
 ```
 
 We are using the thread-index `kc.gix` to access, in theory, the same row of a matrix for all `kc.giy` thread-indexes. 
@@ -553,7 +572,7 @@ The `threadIdx.x` in CUDA is a built-in to access the local thread-id (thread-id
 
 But, what does this mean in practice? For instance, if we have a $4x4$ thread block, the way consecutive threads are organized are as follows:
 ```bash
-(0, 0), (1, 0), (2, 0), (3, 0), (1, 0), (1, 1), (2, 1), (3, 1), ...
+(0, 0), (1, 0), (2, 0), (3, 0), (1, 0), (1, 1), (2, 1), ...
 ```
 
 Thus, for matrix A of our example, the following indexing applies for consecutive threads based on the previous kernel:
@@ -585,7 +604,8 @@ public static void matrixMultiplyKernel2DLI(@RO KernelContext kc,
         if (kc.gix < kc.gsx) {        // swapped giy -> gix
             float acc = 0.0f;
             for (int k = 0; k < size; k++) {
-                acc += (matrixA.array(kc.giy * size + k) * matrixB.array(k * size + kc.gix));
+                acc += (matrixA.array(kc.giy * size + k) 
+                       * matrixB.array(k * size + kc.gix));
             }
             matrixC.array(kc.giy * size + kc.gix, acc);
         }
@@ -598,7 +618,8 @@ The kernel-dispatch (`NDRange`) remains the same. We can also keep the same bloc
 When we profile this GPU kernel with `ncu`, we see that the kernel time takes **2.19 ms** ($4.1x$ times faster than the previous kernel!). But we are not done yet. What else can we do? Let’s take a look at the summary of the profiler:
 
 ```bash
-matrixMultiplyKernel2DLI (64, 64, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+matrixMultiplyKernel2DLI (64, 64, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -607,7 +628,7 @@ matrixMultiplyKernel2DLI (64, 64, 1)x(16, 16, 1), Context 1, Stream 13, Device 0
     SM Frequency                    Mhz       884.50
     Elapsed Cycles                cycle      1939911
     Memory Throughput                 %        96.35
-    Duration                         ms         2.19   >> Kernel Time
+    Duration                         ms         2.19
     ...
     Compute (SM) Throughput           %        96.35
 ```
@@ -683,13 +704,14 @@ private interface MyLocalArray extends DeviceType {
     // Device-Schema: static object that composes an intermediate
     // representation of this Data Structure to be consumed by the 
     // HAT code generator. 
-    DeviceSchema<MyLocalArray> schema = DeviceSchema.of(MyLocalArray.class,
-            arr -> arr.withArray("array", 256));  // Fixed size
+    DeviceSchema<MyLocalArray> schema = DeviceSchema.of(
+        // Fixed size array to 256 float elements
+        MyLocalArray.class, arr -> arr.withArray("array", 256));  
 
-    // data structure to allocate this data structure in shared memory
+    // Marker to allocate in shared memory
     static MyLocalArray createLocal() { return null;}
 
-    // Marker method to allocate this data structure in private memory
+    // Marker to allocate in private memory
     static MyLocalArray createPrivate() { return null;}
 }
 ```
@@ -754,21 +776,26 @@ public static void matrixMultiplyKernel2DTiling(@RO KernelContext kc,
     float sum = 0.0f;
     for (int tile = 0; tile < (size / tileSize); tile++) {
         // Copy from global to shared memory
-        tileA.array((long) localIdy * tileSize + localIdx, matrixA.array((long) row * size + tile * tileSize + localIdx));
-        tileB.array((long) localIdy * tileSize + localIdx, matrixB.array((tile * tileSize + localIdy) * size + col));
+        tileA.array((long) localIdy * tileSize + localIdx, 
+              matrixA.array((long) row * size + tile * tileSize + localIdx));
+        tileB.array((long) localIdy * tileSize + localIdx, 
+              matrixB.array((tile * tileSize + localIdy) * size + col));
 
-        // Apply a barrier for the local group: we need to guarantee that all threads that belong
-        // to the same group reach this point before doing the partial reduction
+        // Apply a barrier for the local group: we need to guarantee that 
+        // all threads that belong to the same group reach this point before 
+        // doing the partial reduction
         kc.barrier();
 
         // compute partial reductions over the tile
         for (int k = 0; k < tileSize; k++) {
-            sum += (tileA.array((long) localIdy * tileSize + k) * tileB.array(k * tileSize + localIdx));
+            sum += (tileA.array((long) localIdy * tileSize + k) 
+                   * tileB.array(k * tileSize + localIdx));
         }
 
-        // A new local barrier for all threads that belong to the same group before loading a new tile into
-        // share memory. With the following barrier, we can ensure that all threads within the same workgroup
-        // finished the compute for the partial reduction
+        // A new local barrier for all threads that belong to the same 
+        // group before loading a new tile into share memory. With the 
+        // following barrier, we can ensure that all threads within the 
+        // same workgroup finished the compute for the partial reduction
         kc.barrier();
     }
 
@@ -783,7 +810,8 @@ we can access the local-thread-id (thread identifier within the block we are run
 and we can access in the 3-dimensions (`lix`, `liy` and `lix` for 1D, 2D and 3D respectively).
 
 ```bash
-  matrixMultiplyKernel2DTiling (64, 64, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+  matrixMultiplyKernel2DTiling (64, 64, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -824,7 +852,8 @@ private interface SharedMemory extends DeviceType {
     void array(long index, float value);
     float array(long index);
 
-    DeviceSchema<SharedMemory> schema = DeviceSchema.of(SharedMemory.class,
+    DeviceSchema<SharedMemory> schema = DeviceSchema.of(
+        SharedMemory.class,
         arr -> arr.withArray("array", 1024));
 
     static SharedMemory createLocal() {return null;}
@@ -834,7 +863,8 @@ private interface PrivateArray extends DeviceType {
     void array(long index, float value);
     float array(long index);
 
-    DeviceSchema<PrivateArray> schema = DeviceSchema.of(PrivateArray.class,
+    DeviceSchema<PrivateArray> schema = DeviceSchema.of(
+        PrivateArray.class,
         arr -> arr.withArray("array", 16));
 
     static PrivateArray createPrivate() {return null;}
@@ -844,7 +874,8 @@ private interface FlatPrivate extends DeviceType {
     void array(long index, float value);
     float array(long index);
 
-    DeviceSchema<FlatPrivate> schema = DeviceSchema.of(FlatPrivate.class,
+    DeviceSchema<FlatPrivate> schema = DeviceSchema.of(
+        FlatPrivate.class,
         arr -> arr.withArray("array", 4));
 
     static FlatPrivate createPrivate() {return null;}
@@ -858,7 +889,7 @@ SharedMemory tileA = SharedMemory.createLocal();
 SharedMemory tileB = SharedMemory.createLocal();
 ...
 
-// Declarations of the arrays in private memory to perform register tiling
+// Declarations of the arrays in private memory 
 PrivateArray threadResults = PrivateArray.createPrivate();
 FlatPrivate regM = FlatPrivate.createPrivate();
 FlatPrivate regN = FlatPrivate.createPrivate();
@@ -877,18 +908,17 @@ The first part of the loop-tile we copy data from the GPU's global memory to the
 // Each thread loops over the tiles
 for (int bkIdx = 0; bkIdx < size; bkIdx += BK) {
 
-    // A) Load data into shared memory for array A
-    for (int loadOffset = 0; loadOffset < BM; loadOffset += strideA) {
-        tileA.array((innerRowA + loadOffset) * BK + innerColA,
-        matrixA.array(((innerRowA + loadOffset) * size + innerColA) + aFrom));
-    }
-
-    // B) Load data matrixB into shared memory for array B
-    for (int loadOffset = 0; loadOffset < BK; loadOffset += strideB) {
-        tileB.array((innerRowB + loadOffset) * BN + innerColB,
-        matrixB.array(((innerRowB + loadOffset) * size + innerColB) + bFrom));
-    }
-    kc.barrier();
+  // A) Load data into shared memory for array A
+  for (int loadOffset = 0; loadOffset < BM; loadOffset += strideA) {
+    tileA.array((innerRowA + loadOffset) * BK + innerColA,
+      matrixA.array(((innerRowA + loadOffset) * size + innerColA) + aFrom));
+  }
+  // B) Load data matrixB into shared memory for array B
+  for (int loadOffset = 0; loadOffset < BK; loadOffset += strideB) {
+    tileB.array((innerRowB + loadOffset) * BN + innerColB,
+      matrixB.array(((innerRowB + loadOffset) * size + innerColB) + bFrom));
+}
+kc.barrier();
 ```
 
 Then, within the register-tile, we compute load from shared memory to private and pre-compute perform the computation:
@@ -920,7 +950,9 @@ Lastly, we copy the final result from private memory to global memory:
 for (int resIdxM = 0; resIdxM < TM; resIdxM++) {
     for (int resIdxN = 0; resIdxN < TN; resIdxN++) {
         float value = threadResults.array(resIdxM * TN + resIdxN);
-        matrixC.array((((threadRow * TM + resIdxM) * size + threadCol * TN + resIdxN) + (cFrom)), value);
+        matrixC.array((((threadRow * TM + resIdxM) * size 
+                        + threadCol * TN + resIdxN) + (cFrom))
+                        , value);
     }
 }
 ```
@@ -933,8 +965,11 @@ Another key change is the number of global threads to be deployed. This changes 
 ```java
 var ndRange = NDRange.of(Global2D.of(256, 256), Local2D.of(16, 16));
 cc.dispatchKernel(ndRange,
-    kc -> matrixMultiplyKernel2DRegisterTiling(kc, matrixA, matrixB, matrixC, globalSize)
-);
+    kc -> matrixMultiplyKernel2DRegisterTiling(kc, 
+                                              matrixA, 
+                                              matrixB, 
+                                              matrixC, 
+                                              globalSize));
 ```
 
 Since we process blocks of $4x4$, each thread will process, in our version, 16 items. Thus, since our input size is 1024 elements, the new global size is reduced to $256x256$ threads.
@@ -943,7 +978,8 @@ But have we got any performance improvement?
 Let's take a look at the `ncu` profiler report:
 
 ```bash
-  matrixMultiplyKernel2DRegisterTiling (16, 16, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+  matrixMultiplyKernel2DRegisterTiling (16, 16, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -1015,7 +1051,8 @@ The resulting value from the `float4View` operation is stored in private memory 
 These are the main changes for this new version of the kernel. Now, let's take a look at its performance. 
 
 ```bash
-matrixMultiplyKernel2DRegisterTilingVectorized (16, 16, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+matrixMultiplyKernel2DRegisterTilingVectorized (16, 16, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -1053,7 +1090,8 @@ In the case of the matrix-multiplication, we use both, the `F16Array` that is us
 private interface SharedMemoryHalf extends DeviceType {
     F16 array(int index);
 
-    DeviceSchema<SharedMemoryHalf> schema = DeviceSchema.of(SharedMemoryHalf.class,
+    DeviceSchema<SharedMemoryHalf> schema = DeviceSchema.of(
+        SharedMemoryHalf.class,
         arr -> arr.withArray("array", 1024)
                 .withDeps(F16.class, half -> half.withField("value")));
 
@@ -1063,7 +1101,8 @@ private interface SharedMemoryHalf extends DeviceType {
 private interface PrivateArrayHalf extends DeviceType {
     F16 array(int index);
 
-    DeviceSchema<PrivateArrayHalf> schema = DeviceSchema.of(PrivateArrayHalf.class,
+    DeviceSchema<PrivateArrayHalf> schema = DeviceSchema.of(
+        PrivateArrayHalf.class,
         arr -> arr.withArray("array", 16)
         .withDeps(F16.class, half -> half.withField("value")));
 
@@ -1072,7 +1111,7 @@ private interface PrivateArrayHalf extends DeviceType {
 ```
 
 ```java
-// Declarations of the arrays in private memory to perform register tiling
+// Declarations of the arrays in private memory
 PrivateArrayHalf threadResults = PrivateArrayHalf.createPrivate();
 FlatPrivateHalf regM = FlatPrivateHalf.createPrivate();
 FlatPrivateHalf regN = FlatPrivateHalf.createPrivate();
@@ -1091,7 +1130,8 @@ A few things to keep in mind:
 If we run this new version on the A10 GPU, we see the following profiling metrics:
 
 ```bash
-  matrixMultiplyKernel2DRegisterTilingHalf (16, 16, 1)x(16, 16, 1), Context 1, Stream 13, Device 0, CC 8.6
+  matrixMultiplyKernel2DRegisterTilingHalf (16, 16, 1)x(16, 16, 1), 
+    Context 1, Stream 13, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
@@ -1115,7 +1155,8 @@ This kernel takes 281 microseconds, this is an 33% improvement over the previous
 These GPU kernels have been highly optimized by NVIDIA for their hardware. So now the question is, close far, or how close is HAT comparing to cuBLAS? 
 
 ```bash
-  ampere_sgemm_128x64_nn (8, 16, 5)x(128, 1, 1), Context 1, Stream 7, Device 0, CC 8.6
+  ampere_sgemm_128x64_nn (8, 16, 5)x(128, 1, 1), 
+    Context 1, Stream 7, Device 0, CC 8.6
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
