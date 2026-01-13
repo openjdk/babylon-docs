@@ -587,8 +587,8 @@ Instead, what we want is the following:
 <img src="./images/hat-matmul/coalesced.png" width="600"/>
 </p>
 
-
-To achieve this, we can swap the indexes between `kc.gix` and `kc.giy`. 
+Basically, we transform column-major access to row-major.
+To achieve this in our example in HAT, we swap the indexes between `kc.gix` and `kc.giy`. 
 Thus, instead of `matrixA.array(kc.gix * size + k)`, we change the indexing to `matrixA.array(kc.giy * size + k)`.
 We also do the same for the second matrix (`matrixB`).
 The following code snippet shows the new version in HAT:
@@ -716,17 +716,17 @@ private interface MyLocalArray extends DeviceType {
 }
 ```
 
-The `DeviceSchema` is a type from the HAT API that defines the structure and layout of the user data type for the HAT
-code generator. 
-`DeviceType` also supports nesting different types, as we will see later when we compose a custom type for FP-16 bits (half of a float). 
+The `DeviceSchema` is a type from the HAT API that defines the layout of the user data type for the HAT code generator. 
+`DeviceType` also supports nesting different types, as we will see later when we compose a custom type for FP-16 bits (half of a float).
 
-#### But, how do we distinguish if this type is going to be used in private or shared memory?
+##### But, how do we distinguish if this type is going to be used in private or shared memory?
 
 HAT provides some utility marker methods such as `createLocal` for a shared data structure, and `createPrivate` for private data structure. 
-These two methods can return `null` from the Java implementation because they are never meant to be executed on the host side (the CPU from Java, at least for now), only from on the device (the GPU). Thus, they are only used as markers for the HAT code generator. 
+Note that we follow the [OpenCL terminology](https://registry.khronos.org/OpenCL/specs/3.0-unified/html/OpenCL_API.html) in this case to define shared memory.
+These two methods (`createLocal` and `createPrivate`) can return `null` from the Java implementation because they are never meant to be executed on the host side (the CPU from Java, at least for now), only from on the device side (e.g., a GPU). Thus, they are only used as **markers** for the HAT code generator. 
 
 The HAT compiler will build a C99-struct with the members of the passed interface. 
-For example, if we declare the `MyLocalArray` in shared memory:
+For example, if we declare the `MyLocalArray` in shared memory from Java:
 
 ```java
 MyLocalArray tileA = MyLocalArray.createLocal();
