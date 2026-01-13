@@ -35,8 +35,9 @@ These code models can be used at runtime to modify the code, perform optimizatio
 One of the foreign programming environments we are exploring in the project Babylon is the GPU environment through the CUDA and OpenCL programming models, called [HAT](https://github.com/openjdk/babylon/tree/code-reflection/hat) (Heterogeneous Accelerator Toolkit). The goal for HAT is to be able to offload and run efficient parallel workloads on hardware accelerators.
 
 Through this article, we want to tackle these two questions:
-1. Is it possible to write parallel programs for GPUs using Java constructs? 
-2. If so, can those Java programs be competitive to native solutions? 
+1) Is it possible to write parallel programs for GPUs using Java constructs?;
+2) If so, can those Java programs be competitive to native solutions?.
+
 
 Each of these questions presents its own set of challenges. The majority of the projects focus on the first challenge with projects such as [Sumatra](https://openjdk.org/projects/sumatra/), [Aparapi](https://github.com/Syncleus/aparapi), [Marawacc](https://github.com/jjfumero/marawacc), [RootBeer](https://github.com/bsletten/rootbeer1), [JaBEE](https://dl.acm.org/doi/10.1145/2159430.2159439), [IBM J9](https://github.com/eclipse-openj9/openj9/blob/master/jcl/src/openj9.cuda/share/classes/com/ibm/cuda/Cuda.java), and more recently [TornadoVM](https://github.com/beehive-lab/TornadoVM). These projects have focused on abstracting GPU programmability and make it easier for Java developers. While they achieve reasonable high performance (e.g., [TornadoVM's study](https://dl.acm.org/doi/epdf/10.1145/3313808.3313819)) by leveraging specialized accelerators, they often do so at the cost of hindering access to advanced GPU optimizations. However, in the era of AI and high-demand computing, simply being faster than Java on CPUs might not be enough.
 
