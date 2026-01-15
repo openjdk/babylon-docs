@@ -829,28 +829,39 @@ acc += (matrixA.array(kc.gix * size + k)
        * matrixB.array(k * size + kc.giy));
 ```
 
-We are using the thread-index `kc.gix` to access, in theory, the same row of a
-matrix for all `kc.giy` thread-indexes.
-But this is not how the CUDA thread mapping works. As mentioned in
+We are using the thread-index `kc.gix` to access, what we pretended, 
+contiguous elements of the the same row of the matrix (row-major).
+HAT maps the parallel construct `kc.gix` to an equivalent parallel construct
+of the underlying programming model, and our case, CUDA. 
+When we have 2D matrices, or multi-dimensional arrays for that matter, 
+this indexing is not how the CUDA thread mapping works. As mentioned in
 the [NVIDIA CUDA blogs](https://developer.nvidia.com/blog/unlock-gpu-performance-global-memory-access-in-cuda/):
 
 > When using 2 or 3-dimensional thread blocks in a CUDA kernel, the threads are
-> laid out linearly with the X index, or `threadIdx.x`, moving the fastest.
+> laid out linearly with the X index, or `threadIdx.x` [(or global index)], 
+> moving the fastest.
 
 The `threadIdx.x` in CUDA is a built-in to access the local thread-id (thread-id
-within a block). In HAT, this is the equivalent of `kernelContext.lix`. Note
-that these built-in functions in HAT are common for all backends, including
-OpenCL and CUDA.
+within a block). In HAT, this is the equivalent of `kc.lix`. But
+our our purpose here, it is also equivalent to our global thread-index (`kc.gix`).
 
 But, what does this mean in practice? For instance, if we have a $4x4$ thread
-block, the way consecutive threads are organized are as follows:
+block, the way consecutive threads using `kc.gix, kc.giy` are 
+organized are as follows:
 
 ```bash
 (0, 0), (1, 0), (2, 0), (3, 0), (1, 0), (1, 1), (2, 1), ...
 ```
 
-Thus, for matrix A of our example, the following indexing applies for
-consecutive threads based on the previous kernel:
+As mentioned in the CUDA documentation, since the first index moves faster,
+the `kc.gix` index moves faster in HAT, and we are using this parallel built-in
+to access the rows of `matrixA`.
+
+That means that, for each consecutive threads in the first dimension `kc.gix`, 
+(gix, gix+1), we are accessing the matrices in column-major, instead of 
+row-major. Thus, for matrix A of our example, 
+the following indexing applies for consecutive threads based on the 
+previous kernel:
 
 <p align="center">
 <img src="./images/hat-matmul/uncoalesced.png" width="600"/>
@@ -862,7 +873,6 @@ Instead, what we want is the following:
 <img src="./images/hat-matmul/coalesced.png" width="600"/>
 </p>
 
-Basically, we transform column-major access to row-major.
 To achieve this in our example in HAT, we swap the indexes between `kc.gix` and
 `kc.giy`.
 Thus, instead of `matrixA.array(kc.gix * size + k)`, we change the indexing to
