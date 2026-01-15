@@ -446,6 +446,10 @@ computation and memory behavior of our kernels.
 For measuring the elapsed time on the CPU, we run the Java multithreaded version
 multiple times (100 times) and take the average of all runs.
 
+If you want to follow along and experiment with this example, the source code
+is fully available on GitHub under the `HAT` subdirectory
+([link](https://github.com/openjdk/babylon/blob/code-reflection/hat/examples/matmul/src/main/java/matmul/Main.java)).
+
 ### Baselines 
 
 We will establish two baselines: one for the CPU and one for the GPU. We start
@@ -1670,9 +1674,10 @@ resources.
 
 ## Resources 
 
-- [https://github.com/openjdk/babylon](https://github.com/openjdk/babylon)
-- [https://github.com/openjdk/babylon/tree/code-reflection/hat](https://github.com/openjdk/babylon/tree/code-reflection/hat)
-- [https://jjfumero.github.io/posts/2025/02/07/babylon-and-tornadovm](https://jjfumero.github.io/posts/2025/02/07/babylon-and-tornadovm)
+- [Babylon repository](https://github.com/openjdk/babylon)
+- [HAT repository](https://github.com/openjdk/babylon/tree/code-reflection/hat)
+- [MatMul Example in HAT](https://github.com/openjdk/babylon/blob/code-reflection/hat/examples/matmul/src/main/java/matmul/Main.java)
+- [Babylon OpenJDK: A Guide for Beginners and Comparison with TornadoVM](https://jjfumero.github.io/posts/2025/02/07/babylon-and-tornadovm)
 - [Java for AI (Video)](https://www.youtube.com/watch?v=hBffN0xW784)
 - [Writing GPU-Ready AI Models in Pure Java with Babylon (Video)](https://www.youtube.com/watch?v=DaMgGyfTSSw)
 - [Symbolic Modeling and Transformation of Java Code (video)](https://www.youtube.com/watch?v=jbXobiQN8Fw)
