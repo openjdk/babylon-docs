@@ -65,8 +65,12 @@ Through this article, we want to tackle these two questions:
 
 Each of these questions presents its own set of challenges. The majority of the
 projects focus on the first challenge with projects such
-as [Sumatra](https://openjdk.org/projects/sumatra/), [Aparapi](https://github.com/Syncleus/aparapi), [Marawacc](https://github.com/jjfumero/marawacc), [RootBeer](https://github.com/bsletten/rootbeer1), [JaBEE](https://dl.acm.org/doi/10.1145/2159430.2159439)
-, [IBM J9](https://github.com/eclipse-openj9/openj9/blob/master/jcl/src/openj9.cuda/share/classes/com/ibm/cuda/Cuda.java), and more recently [TornadoVM](https://github.com/beehive-lab/TornadoVM). These
+as [Sumatra](https://openjdk.org/projects/sumatra/), [Aparapi](https://github.com/Syncleus/aparapi), 
+[Marawacc](https://github.com/jjfumero/marawacc), 
+[RootBeer](https://github.com/bsletten/rootbeer1), 
+[JaBEE](https://dl.acm.org/doi/10.1145/2159430.2159439),
+[IBM J9](https://github.com/eclipse-openj9/openj9/blob/master/jcl/src/openj9.cuda/share/classes/com/ibm/cuda/Cuda.java), 
+and more recently [TornadoVM](https://github.com/beehive-lab/TornadoVM). These
 projects have focused on abstracting GPU programmability and make it easier for
 Java developers. While they achieve reasonable high performance (
 e.g., [TornadoVM's study](https://dl.acm.org/doi/epdf/10.1145/3313808.3313819))
