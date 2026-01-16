@@ -374,7 +374,7 @@ Between `accelerator` and the `compute` layers, programmers can compose complex
 applications with multiple kernels and multiple thread-configurations.
 
 <p align="center">
-<img src="./images/hat-matmul/hat-model.png" width="1000"/>
+<img src="./images/hat-model.png" width="1000"/>
 </p>
 
 Furthermore, the accelerator and the compute-layers are used to build the whole
@@ -871,13 +871,13 @@ matrixA.array(kc.gix * size + k)
 The way memory is accessed is as follows:
 
 <p align="center">
-<img src="./images/hat-matmul/uncoalesced.png" width="420"/>
+<img src="./images/uncoalesced.png" width="420"/>
 </p>
 
 Instead, what we want is the following:
 
 <p align="center">
-<img src="./images/hat-matmul/coalesced.png" width="600"/>
+<img src="./images/coalesced.png" width="600"/>
 </p>
 
 In the case of HAT, to achieve optimal memory coalescing, the mapping must
@@ -968,7 +968,7 @@ The following figure shows **a simplified representation** of the different
 levels of GPU's memory hierarchy.
 
 <p align="center">
-<img src="./images/hat-matmul/memoryHirarchyGPU-Simplified.png" width="600"/>
+<img src="./images/memoryHirarchyGPU-Simplified.png" width="600"/>
 </p>
 
 Starting from the bottom, GPUs have an off-chip memory called global memory.
@@ -1616,7 +1616,7 @@ implementations. The higher, the better.
 As mentioned, we use the `ncu` profiler to obtain this data.
 
 <p align="center">
-<img src="./images/hat-matmul/perfplots/performance-with-ncu.png" width="900"/>
+<img src="./images/perfplots/performance-with-ncu.png" width="900"/>
 </p>
 
 The `ncu` profiler, in order to deterministically compare different kernels,
@@ -1628,7 +1628,7 @@ left to the GPU driver.
 From my perspective, this case represents a more real-world scenario.
 
 <p align="center">
-<img src="./images/hat-matmul/perfplots/performace-cuda-events.png" width="900"/>
+<img src="./images/perfplots/performace-cuda-events.png" width="900"/>
 </p>
 
 We see higher performance compared to the previous graph: cuBLAS achieving 12.7
@@ -1641,7 +1641,7 @@ HAT is able to achieve $83x$ and $132x$ over parallel streams when using an
 optimized version for FP32 and FP16 data types respectively.
 
 <p align="center">
-<img src="./images/hat-matmul/perfplots/cuda-total-time.png" width="900"/>
+<img src="./images/perfplots/cuda-total-time.png" width="900"/>
 </p>
 
 ### Is it possible to improve it?

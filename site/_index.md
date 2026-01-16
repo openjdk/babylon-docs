@@ -47,7 +47,7 @@ Code reflection consists of three parts:
 ## Documents
 
   - Articles
-    - [Optimizing GPU Programs from Java using Babylon and HAT](articles/hat-matmul) (January 2026)
+    - [Optimizing GPU Programs from Java using Babylon and HAT](articles/hat-matmul/hat-matmul) (January 2026)
     - [Code Models](articles/code-models) (June 2024, Updated December 2025)
     - [Automatic differentiation of Java code using Code Reflection](articles/auto-diff) (February 2024)
     - [Emulating C# LINQ in Java using Code Reflection](articles/linq) (February 2024)
