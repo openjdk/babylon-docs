@@ -805,9 +805,7 @@ fetch multiple cache lines to be able to load the right data, and if the data is
 also not present in the L2 cache, then the worst case is to continuously fetch
 the data from the GPU's global.
 
-In this article, we are not going to detail how the GPU programming and
-execution models work, and how GPU threads accesses memory,
-but, in a nutshell, GPU coalesced memory accesses occur when consecutive threads
+In a nutshell, GPU coalesced memory accesses occur when consecutive threads
 within a warp access consecutive memory locations, minimizing cache misses.
 A **warp** is a fundamental unit of execution on NVIDIA GPUs, representing a set
 of 32 threads that run in parallel on the same Streaming Multiprocessor (SM). An
@@ -815,56 +813,65 @@ SM would be equivalent to a CPU core, and all GPU cores (CUDA cores in the case
 of NVIDIA GPUs) would be equivalent to functional units and vector units of CPU
 cores.
 
-To know more about GPU memory coalescing, I refer to the following blogs:
+To know more about GPU memory coalescing and the GPU execution model, I refer 
+to the following articles:
 
 - [Unlock GPU Performance: Global Memory Access in CUDA](https://developer.nvidia.com/blog/unlock-gpu-performance-global-memory-access-in-cuda/)
 - [Optimize a CUDA Matmul Kernel for cuBLAS-like Performance](https://siboehm.com/articles/22/CUDA-MMM)
 
 Analyzing our previous 2D kernel, we see that the memory accessing pattern is
-not optimal:
-This refers to this line of the Java code:
+not optimal. This refers to this line of the Java code of our 
+matrix-multiplication:
 
 ```java
 acc += (matrixA.array(kc.gix * size + k) 
        * matrixB.array(k * size + kc.giy));
 ```
 
-We are using the thread-index `kc.gix` to access, what we pretended, 
-contiguous elements of the the same row of the matrix (row-major).
-HAT maps the parallel construct `kc.gix` to an equivalent parallel construct
-of the underlying programming model, and our case, CUDA. 
-When we have 2D matrices, or multi-dimensional arrays for that matter, 
-this indexing is not how the CUDA thread mapping works. As mentioned in
-the [NVIDIA CUDA blogs](https://developer.nvidia.com/blog/unlock-gpu-performance-global-memory-access-in-cuda/):
+The performance of matrix operations is heavily dictated by the memory layout,
+and specifically whether elements are stored in 
+[row-major or column-major order](https://en.wikipedia.org/wiki/Row-_and_column-major_order).
+Programming languages like CUDA and OpenCL uses row-major memory layout to 
+store n-dimensional arrays (e.g., a matrix) in memory.
+Thus, in HAT, we have also used the `F32Array` array-type to represent a 
+2D matrix into a flatten 1D array using row-major layout.
+To maximize GPU performance, we must ensure that memory access patterns 
+are also coalesced, meaning the iteration over elements should align with 
+the thread-id.
 
-> When using 2 or 3-dimensional thread blocks in a CUDA kernel, the threads are
+In our example we are using the global thread-id `kc.gix` 
+(thread-id in the first dimension), and `kc.giy` (thread-id in the second 
+dimension) to map and access the data elements of each matrix. 
+However, [following the NVIDIA documentation](https://developer.nvidia.com/blog/unlock-gpu-performance-global-memory-access-in-cuda/),
+the way we mapped thread-ids to access data results in not coalesced memory 
+accesses. The reason is as follows:
+
+> "When using 2 or 3-dimensional thread blocks in a CUDA kernel, the threads are
 > laid out linearly with the X index, or `threadIdx.x` [(or global index)], 
-> moving the fastest.
+> moving the fastest."
 
 The `threadIdx.x` in CUDA is a built-in to access the local thread-id (thread-id
-within a block). In HAT, this is the equivalent of `kc.lix`. But
-our our purpose here, it is also equivalent to our global thread-index (`kc.gix`).
+within a block). In HAT, this is the equivalent of `kc.lix`. But our purpose 
+here, it is also equivalent to our global thread-id (`kc.gix`).
 
-But, what does this mean in practice? For instance, if we have a $4x4$ thread
-block, the way consecutive threads using `kc.gix, kc.giy` are 
-organized are as follows:
+What does this mean in practice? For instance, if we have a $4x4$ thread
+block, the way consecutive threads using a 2D configuration (`kc.gix, kc.giy`) 
+is mapped are as follows:
 
 ```bash
 (0, 0), (1, 0), (2, 0), (3, 0), (1, 0), (1, 1), (2, 1), ...
 ```
 
-As mentioned in the CUDA documentation, since the first index moves faster,
-the `kc.gix` index moves faster in HAT, and we are using this parallel built-in
-to access the rows of `matrixA`.
-
-That means that, for each consecutive threads in the first dimension `kc.gix`, 
-(gix, gix+1), we are accessing the matrices in column-major, instead of 
-row-major. Thus, for matrix A of our example, 
-the following indexing applies for consecutive threads based on the 
-previous kernel:
+If we map this to the HAT terminology, since the global-id in the first 
+dimension moves faster in a 2D-range, this means that the `kc.gix` id moves 
+faster. Thus, for this expression:
+```java
+matrixA.array(kc.gix * size + k)
+```
+The way memory is accessed is as follows:
 
 <p align="center">
-<img src="./images/hat-matmul/uncoalesced.png" width="600"/>
+<img src="./images/hat-matmul/uncoalesced.png" width="420"/>
 </p>
 
 Instead, what we want is the following:
@@ -873,11 +880,18 @@ Instead, what we want is the following:
 <img src="./images/hat-matmul/coalesced.png" width="600"/>
 </p>
 
-To achieve this in our example in HAT, we swap the indexes between `kc.gix` and
-`kc.giy`.
+In the case of HAT, to achieve optimal memory coalescing, the mapping must
+ensure that threads with consecutive `kc.gix` values within a warp access 
+consecutive memory addresses. By assigning threads with the same `kc.giy` to 
+a single row, the access pattern aligns with the matrix’s row-major layout.
+
+To achieve this, we simply swap the indexes between `kc.gix` and `kc.giy`.
 Thus, instead of `matrixA.array(kc.gix * size + k)`, we change the indexing to
 `matrixA.array(kc.giy * size + k)`.
 We also do the same for the second matrix (`matrixB`).
+Note that `matrixB` is still not coalesced, but we will address this when we 
+introduce shared memory.
+
 The following code snippet shows the new version in HAT:
 
 ```java
