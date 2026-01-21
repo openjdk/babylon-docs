@@ -33,7 +33,7 @@ make preview
 
 Then, visit `localhost:8081` in your browser. 
 
-To see the preview new modifications once the server has started:
+To preview changes once the server has started:
 
 ```bash
 make && make update
