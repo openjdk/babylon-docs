@@ -33,5 +33,13 @@ make preview
 
 Then, visit `localhost:8081` in your browser. 
 
+To see the preview new modifications once the server has started:
+
+```bash
+make && make update
+```
+
+And refresh the page in the web browser. 
+
 For more information about configuration and installation, visit the 
 [project's repo](https://github.com/mbreinhold/ojweb-generate).
