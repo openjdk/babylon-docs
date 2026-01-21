@@ -13,3 +13,33 @@ site.
 
 See https://openjdk.org/ for more information about the OpenJDK
 Community and the JDK.
+
+
+## How to preview babylon-docs in your browser?
+
+To preview your changes, you can use the 
+[OpenJDK Web Page Generator](https://github.com/mbreinhold/ojweb-generate.git).
+
+Instructions:
+
+```bash
+cd babylon-docs/site/
+git clone https://github.com/mbreinhold/ojweb-generate.git
+echo 'include ojweb-generate/Makefile' > Makefile
+
+make 
+make preview
+```
+
+Then, visit `localhost:8081` in your browser. 
+
+To preview changes once the server has started:
+
+```bash
+make && make update
+```
+
+And refresh the page in the web browser. 
+
+For more information about configuration and installation, visit the 
+[project's repo](https://github.com/mbreinhold/ojweb-generate).
