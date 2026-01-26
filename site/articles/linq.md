@@ -157,7 +157,7 @@ initializer expression, will be built by `javac` and made accessible at runtime.
 
 ### Obtaining a code model
 
-Let's first focus on obtaining the code model of a quotable lambda expression.
+Let's first focus on obtaining the code model of a reflectable lambda expression.
 We shall return to how code models for queries are composed and built in later
 sections.
 
@@ -168,18 +168,17 @@ customer is located in the city of London, as follows.
 ```java
 @Reflect
 Predicate<Customer> p = c -> c.city.equals("London");
-Optional<Quoted> q = Op.ofQuotable(p);
-Op op = q.orElseThrow().op();
-JavaOp.LambdaOp pcm = (JavaOp.LambdaOp) op;
+Optional<JavaOp.LambdaOp> q = Op.ofLambda(p);
+JavaOp.LambdaOp pcm = q.orElseThrow().op();
 ```
 [//]: # (@formatter:on)
 
-We call the `Op::ofQuotable` method to obtain an optional instance of `Quoted`
+We call the `Op::ofLambda` method to obtain an optional instance of `Quoted`
 from which we obtain the code model with a call to `Quoted::op`. In this case
 the lambda expression does not capture any values, but if it did we could obtain
 those values from the quoted instance.
 
-The code model of `p` is represented as an instance of `CoreOps.LambdaOp`
+The code model of `p` is represented as an instance of `JavaOp.LambdaOp`
 corresponding to a *lambda expression* operation that models a lambda
 expression. Since quoting is potentially not limited to just the quoting of
 lambda expressions we first obtain the code model as an instance
@@ -200,7 +199,7 @@ programs. This may appear surprising at first. Readers may be more familiar with
 term "operation" in a more conventional sense, such as arithmetic operations.
 However, given the structure described above, there is no need to limit
 ourselves to this conventional sense. We are free to define an operation whose
-operational semantics *declare* a function (instances of `CoreOps.FuncOp`),
+operational semantics *declare* a function (instances of `CoreOp.FuncOp`),
 model a Java lambda expression (instances of `JavaOp.LambdaOp`), or model a
 Java `try` statement (instances of `JavaOp.TryOp`).
 
@@ -214,7 +213,7 @@ System.out.println(pcm.toText());
 Which prints the following text.
 
 ```text
-%0 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true
+%0 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isReflectable=true
 (%1 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
     %2 : Var<java.type:"linq.TestLinq$Customer"> = var %1 @"c";
     %3 : java.type:"linq.TestLinq$Customer" = var.load %2;
@@ -298,7 +297,7 @@ System.out.println(londonCustomers.expression().toText());
 
 ```text
 func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.Queryable<linq.TestLinq$Customer>" -> {
-    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isReflectable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
         %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
         %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
         %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
@@ -325,7 +324,7 @@ System.out.println(londonCustomerNames.expression().toText());
 
 ```text
 func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.Queryable<java.lang.String>" -> {
-    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isReflectable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
         %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
         %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
         %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
@@ -334,7 +333,7 @@ func @"query" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type
         return %7;
     };
     %8 : java.type:"linq.Queryable<linq.TestLinq$Customer>" = invoke %0 %1 @java.ref:"linq.Queryable::where(java.util.function.Predicate):linq.Queryable";
-    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isQuotable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
+    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isReflectable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
         %11 : Var<java.type:"linq.TestLinq$Customer"> = var %10 @"c";
         %12 : java.type:"linq.TestLinq$Customer" = var.load %11;
         %13 : java.type:"java.lang.String" = field.load %12 @java.ref:"linq.TestLinq$Customer::contactName:java.lang.String";
@@ -361,7 +360,7 @@ System.out.println(results.expression().toText());
 
 ```text
 func @"queryResult" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")java.type:"linq.QueryResult<java.util.stream.Stream<java.lang.String>>" -> {
-    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isQuotable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
+    %1 : java.type:"java.util.function.Predicate<linq.TestLinq$Customer>" = lambda @lambda.isReflectable=true (%2 : java.type:"linq.TestLinq$Customer")java.type:"boolean" -> {
         %3 : Var<java.type:"linq.TestLinq$Customer"> = var %2 @"c";
         %4 : java.type:"linq.TestLinq$Customer" = var.load %3;
         %5 : java.type:"java.lang.String" = field.load %4 @java.ref:"linq.TestLinq$Customer::city:java.lang.String";
@@ -370,7 +369,7 @@ func @"queryResult" (%0 : java.type:"linq.Queryable<linq.TestLinq$Customer>")jav
         return %7;
     };
     %8 : java.type:"linq.Queryable<linq.TestLinq$Customer>" = invoke %0 %1 @java.ref:"linq.Queryable::where(java.util.function.Predicate):linq.Queryable";
-    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isQuotable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
+    %9 : java.type:"java.util.function.Function<linq.TestLinq$Customer, java.lang.String>" = lambda @lambda.isReflectable=true (%10 : java.type:"linq.TestLinq$Customer")java.type:"java.lang.String" -> {
         %11 : Var<java.type:"linq.TestLinq$Customer"> = var %10 @"c";
         %12 : java.type:"linq.TestLinq$Customer" = var.load %11;
         %13 : java.type:"java.lang.String" = field.load %12 @java.ref:"linq.TestLinq$Customer::contactName:java.lang.String";
@@ -431,7 +430,7 @@ Here is the implementation of the `where` method.
 ```text
 @SuppressWarnings("unchecked")
 default Queryable<T> where(Predicate<T> f) {
-    JavaOp.LambdaOp l = (JavaOp.LambdaOp) Op.ofQuotable(f).get().op();
+    JavaOp.LambdaOp l = Op.ofLambda(f).orElseThrow().op();
     return (Queryable<T>) insertQuery(elementType(), "where", l);
 }
 ```
@@ -464,7 +463,7 @@ private Queryable<?> insertQuery(JavaType elementType, String methodName, JavaOp
 ```
 
 We start by building a new function operation with the static factory method
-`CoreOps.func`. A method reference is constructed that describes the function's
+`CoreOp.func`. A method reference is constructed that describes the function's
 parameters and return type. Then we call the `body` method to build the function
 operation's body. The implementation of `body` calls the lambda expression with
 function body's *entry block builder*, from which we can add operations.

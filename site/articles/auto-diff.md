@@ -168,8 +168,8 @@ obtain its code model using reflection we do this.
 
 ```java
 Method fm = T.class.getDeclaredMethod("f", double.class, double.class);
-Optional<CoreOps.FuncOp> o = Op.ofMethod(fm);
-CoreOps.FuncOp fcm = o.orElseThrow();
+Optional<CoreOp.FuncOp> o = Op.ofMethod(fm);
+CoreOp.FuncOp fcm = o.orElseThrow();
 ```
 
 Using the reflection API we find the `java.lang.reflect.Method` instance of `f`,
@@ -177,7 +177,7 @@ and then obtain its code model by invoking the method `Op.ofMethod`. Only
 methods annotated with `@Reflect` will have code models, hence this
 method is partial.
 
-`f`'s code model is represented as an instance of `CoreOps.FuncOp`,
+`f`'s code model is represented as an instance of `CoreOp.FuncOp`,
 corresponding to a *function declaration* operation that models a Java method
 declaration.
 
@@ -195,12 +195,12 @@ programs. This may appear surprising at first. Readers may be more familiar with
 term "operation" in a more conventional sense, such as arithmetic operations.
 However, given the structure described above, there is no need to limit
 ourselves to this conventional sense. We are free to define an operation whose
-operational semantics *declare* a function (instances of `CoreOps.FuncOp`),
+operational semantics *declare* a function (instances of `CoreOp.FuncOp`),
 model a Java lambda expression (instances of `JavaOp.LambdaOp`), or model a
 Java `try` statement (instances of `JavaOp.TryOp`).
 
 What does the code model of `f` look like? We can serialize its in-memory form
-(the instance of `CoreOps.FuncOp`) to a textual form.
+(the instance of `CoreOp.FuncOp`) to a textual form.
 
 ```java
 System.out.println(fcm.toText());
@@ -563,11 +563,11 @@ code model.
 import ad.ForwardDifferentiation;
 
 Method fm = T.class.getDeclaredMethod("f", double.class, double.class);
-Optional<CoreOps.FuncOp> o = Op.ofMethodfm);
-CoreOps.FuncOp fcm = SSA.transform(o.orElseThrow());
+Optional<CoreOp.FuncOp> o = Op.ofMethod(fm);
+CoreOp.FuncOp fcm = SSA.transform(o.orElseThrow());
 Block.Parameter x = fcm.body().entryBlock().parameters().get(0);
 // Code model in, code model out
-CoreOps.FuncOp dfcm_x = ForwardDifferentiation.partialDiff(fcm, x);
+CoreOp.FuncOp dfcm_x = ForwardDifferentiation.partialDiff(fcm, x);
 ```
 
 ```text
