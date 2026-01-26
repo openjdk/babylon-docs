@@ -443,9 +443,9 @@ programs. This may appear surprising at first. Readers may be more familiar with
 term "operation" in a more conventional sense, such as arithmetic operations.
 However, given the structure described above, there is no need to limit
 ourselves to this conventional sense. We are free to define an operation whose
-operational semantics *declare* a function (instances of `CoreOps.FuncOp`),
-model a Java lambda expression (instances of `CoreOps.LambdaOp`), or model a
-Java `try` statement (instances of `ExtendedOps.JavaTryOp`). Or, as we shall see
+operational semantics *declare* a function (instances of `CoreOp.FuncOp`),
+model a Java lambda expression (instances of `JavaOp.LambdaOp`), or model a
+Java `try` statement (instances of `JavaOp.TryOp`). Or, as we shall see
 later define operations that model Triton programs.
 
 What does the code model of `add_kernel2` look like? We can obtain the code
