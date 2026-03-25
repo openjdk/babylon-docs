@@ -59,31 +59,40 @@ Code reflection consists of three parts:
     - [babylon-dev](https://mail.openjdk.org/mailman/listinfo/babylon-dev)
       ([archives](https://mail.openjdk.org/pipermail/babylon-dev/))
   - Talks
-    - Devoxx Belgium 2025
-        - Java for AI,
-          [slides](https://cr.openjdk.org/~psandoz/conferences/2025-Devoxx-Belgium/Devoxx-Belgium-25-Java-For-AI.pdf),
-          [video](https://inside.java/2025/10/14/devoxxbelgium-java-for-ai/)
-    - JVMLS 2025
-        - Code Reflection,
-          [slides](https://cr.openjdk.org/~psandoz/conferences/2025-JVMLS/Code-Reflection-JVMLS-25-08-04.pdf),
     - JavaOne 2025
-        - Java GPGPU Enablement: Are We There Yet?  
-          [video](https://inside.java/2025/07/14/javaone-hat/)
+      - Java for AI 
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2026-JavaOne/JavaOne-26-Java-For-AI.pdf)
+      - Reflecting on HAT
+        [slides forthcoming]
+      - Under the HAT - Empowering GPU Acceleration for Java
+        [slides](https://cr.openjdk.org/~jfumero/presentations/JavaOne26-EmpoweringGPUsFromJava.pdf)
+      - Integrating ONNX for Generative AI in Java - with Project Babylon
+        [slides](https://cr.openjdk.org/~asotona/JavaONE%202026%20-%20LRN1427%20-%20Integrating%20ONNX%20for%20Generative%20AI%20LLMs%20in%20Java%20with%20Project%20Babylon.pdf)
+    - Devoxx Belgium 2025
+      - Java for AI,
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2025-Devoxx-Belgium/Devoxx-Belgium-25-Java-For-AI.pdf),
+        [video](https://inside.java/2025/10/14/devoxxbelgium-java-for-ai/)
+    - JVMLS 2025
+      - Code Reflection,
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2025-JVMLS/Code-Reflection-JVMLS-25-08-04.pdf)
+    - JavaOne 2025
+      - Java GPGPU Enablement: Are We There Yet?  
+        [video](https://inside.java/2025/07/14/javaone-hat/)
     - JVMLS 2024
-        - Code Reflection,
-          [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/Code-Reflection-JVMLS-24-08-05.pdf),
-          [video](https://www.youtube.com/watch?v=6c0DB2kwF_Q&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=5&pp=iAQB)
-        - Heterogeneous Accelerator Toolkit,
-          [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/JAVA_BABYLON_HAT-JVMLS-24-08-05.pdf),
-          [video](https://www.youtube.com/watch?v=szGiOvfTPfI&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=15)
-        - Translating Java to SPIR-V,
-          [video](https://www.youtube.com/watch?v=GQLBzrbkiKA&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=9)
+      - Code Reflection,
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/Code-Reflection-JVMLS-24-08-05.pdf),
+        [video](https://www.youtube.com/watch?v=6c0DB2kwF_Q&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=5&pp=iAQB)
+      - Heterogeneous Accelerator Toolkit,
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2024-JVMLS/JAVA_BABYLON_HAT-JVMLS-24-08-05.pdf),
+        [video](https://www.youtube.com/watch?v=szGiOvfTPfI&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=15)
+      - Translating Java to SPIR-V,
+        [video](https://www.youtube.com/watch?v=GQLBzrbkiKA&list=PLX8CzqL3ArzUEYnTa6KYORRbP3nhsK0L1&index=9)
     - JVMLS 2023
-        - Code Reflection,
-          [slides](https://cr.openjdk.org/~psandoz/conferences/2023-JVMLS/Code-Reflection-JVMLS-23-08-07.pdf),
-          [video](https://youtu.be/xbk9_6XA_IY)
-        - Java and GPU ... are we nearly there yet?,
-          [video](https://youtu.be/lbKBu3lTftc)
+      - Code Reflection,
+        [slides](https://cr.openjdk.org/~psandoz/conferences/2023-JVMLS/Code-Reflection-JVMLS-23-08-07.pdf),
+        [video](https://youtu.be/xbk9_6XA_IY)
+      - Java and GPU ... are we nearly there yet?,
+        [video](https://youtu.be/lbKBu3lTftc)
 
 ## Repository
 
