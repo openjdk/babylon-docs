@@ -60,7 +60,7 @@ Code reflection consists of three parts:
     - [babylon-dev](https://mail.openjdk.org/mailman/listinfo/babylon-dev)
       ([archives](https://mail.openjdk.org/pipermail/babylon-dev/))
   - Talks
-    - JavaOne 2025
+    - JavaOne 2026
       - Java for AI 
         [slides](https://cr.openjdk.org/~psandoz/conferences/2026-JavaOne/JavaOne-26-Java-For-AI.pdf)
       - Reflecting on HAT
